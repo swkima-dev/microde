@@ -8,27 +8,90 @@
 
 
 ```
-user_input = 入力の受取
-context = ""
-Loop:
-  context += ログ出力と会話履歴の取得
-  context += user_input
-  終了判定
+メッセージ履歴の初期化
+~~
+~~
+user_input = ユーザーメッセージの受信
+
+loop:
+  メッセージ履歴の取得
+  
+  if 終了判定:
+    break
   if コンテキストオーバーフロー:
-    compaction(context) # コンテキスト圧縮
+    コンテキスト圧縮
 
-  context += LLM_process()
+  main_agent()
 
-  if コンテキストオーバーフロー:
-    context = compaction(context) # コンテキスト圧縮
-
-function LLM_process():
-  While ! finish:
-    LLM呼び出し
-    ツール呼び出し
+fn main_agent():
+  システムプロンプトの組み立て
+  ツールセットの解決
+  loop:
+    response = LLM呼び出し
+    if response == 終了判定:
+      break
+    match response{
+      ツール呼び出し
+      その他
+    }
 ```
 
 この際、複雑なエラーハンドリングやDoom Loop (LLM呼び出しの無限ループ)は検出しない。
+
+## エージェント
+
+Rigの `Agent` 構造体は `chat()`と `completion()`という2つのメソッドを実装していて、
+これら2つの実装はかなり意味が異なります
+
+### `chat()`
+
+`chat()`は、プロンプトと `Vec<Message>`を受け取ってLLMを呼び出しますが、呼び出しの過程で
+行われたtool useや推論のトークンは最終的に捨てられます。
+一方で、tool useを受けたツール実行とLLM呼び出しの再処理がラッパーされているため、実装が楽です。
+
+┌─────────────────────────────────────────────────────┐
+│  agent.chat("計算して", external_history) の内部     │
+│                                                     │
+│  internal_history = external_history.clone()        │
+│                                                     │
+│  loop {                                             │
+│    resp = model.completion(prompt, internal_history) │
+│                                                     │
+│    match resp {                                     │
+│      Text(t) => return Ok(t)  ← String だけ返す    │
+│                                                     │
+│      ToolCall(tc) => {                              │
+│        result = toolset.call(tc)                    │
+│        internal_history.push(AssistantContent::ToolCall) │
+│        internal_history.push(UserContent::ToolResult)    │
+│        // ↑ 内部にだけ積む。external_history は変わらない │
+│        continue                                     │
+│      }                                              │
+│    }                                                │
+│  }                                                  │
+└─────────────────────────────────────────────────────┘
+
+### `completion()`
+
+これはLLMの呼び出しをAgentとして抽象化（ラップした） `chat()`とは異なり、
+Agentが実装した `Completion` トレイトから `CompletionRequestBuilder`構造体を作成するメソッドです。
+
+これによってAgentに設定済みのpreamble, temperature, toolsがプリセット済みの状態で、
+さらに上書き・追加して `send()`メソッドを呼ぶことでLLM呼び出しが行われます
+
+### 最終的なエージェント設計
+
+`chat()`と`completion()`の違いから、以下が言えます
+
+- Coding Agent のメインとなるエージェントは `completion()`を元に実装される必要がある
+  - 以下の機能は `chat()`を用いると実現できないため
+    - tool useの発生時にユーザーに承認を求める機能
+    - tool useや推論などの過程を含めたコンテキストの保持
+  - 理想的には `completion()`を使って細かなコンテキストの管理やフロー制御を行うべき
+    - OpenCode やCodexはこれに近い
+- メインとなるエージェントが呼び出すサブエージェントは、`chat()`で実装してもよい
+  - サブエージェントの推論過程をメインエージェントに引き継がないという設計の下では可能
+  - 渡すtoolsを適切に制限することでユーザー承認がいらないような設計になるなら、`chat()`を使うことで実装が楽になる
 
 ## ツール定義
 
