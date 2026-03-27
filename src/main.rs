@@ -1,83 +1,13 @@
+mod memory;
 mod util;
 
-use rig::OneOrMany;
+use std::io::{self, Write};
+
 use rig::client::CompletionClient;
-use rig::completion::Message;
-use rig::completion::Prompt;
-use rig::message::{AssistantContent, UserContent};
+use rig::completion::Completion;
 use rig::providers::anthropic::{Client, completion::ANTHROPIC_VERSION_LATEST};
-use util::count_tokens;
 
-pub struct ConversationMemory {
-    messages: Vec<Message>,
-    max_token: usize,
-    token_usage: usize,
-}
-
-impl ConversationMemory {
-    pub fn new(max_token: usize) -> Self {
-        Self {
-            messages: Vec::new(),
-            max_token,
-            token_usage: 0,
-        }
-    }
-
-    pub fn add_user_message(&mut self, input: &str, input_tokens: usize) {
-        let message = Message::User {
-            content: OneOrMany::one(UserContent::text(input)),
-        };
-
-        self.messages.push(message);
-
-        self.token_usage += input_tokens;
-    }
-
-    pub fn add_assistant_message(&mut self, input: &str, input_tokens: usize) {
-        let message = Message::Assistant {
-            id: None,
-            content: OneOrMany::one(AssistantContent::text(input)),
-        };
-
-        self.messages.push(message);
-        self.token_usage += input_tokens;
-    }
-
-    pub fn get_messages(&self) -> &[Message] {
-        &self.messages
-    }
-
-    pub fn clear(&mut self) {
-        self.messages.clear();
-        self.token_usage = 0;
-    }
-}
-
-use rig::completion::Chat;
-
-impl ConversationMemory {
-    pub async fn compact<T>(&mut self, client: &T) -> Result<(), Box<dyn std::error::Error>>
-    where
-        T: Chat,
-    {
-        if self.token_usage <= self.max_token {
-            return Ok(());
-        }
-
-        let response = client
-            .chat(
-                "Please provide a concise summary of this conversation, \
-                 capturing key points, decisions, and context.",
-                self.messages.clone(),
-            )
-            .await?;
-
-        self.messages.clear();
-        self.add_assistant_message(&response, count_tokens(&response).await.unwrap());
-
-        Ok(())
-    }
-}
+const SYSTEM_PROMPT: &str = "You are a helpful chatbot for casual conversation.";
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -88,14 +18,48 @@ async fn main() -> Result<(), anyhow::Error> {
         .anthropic_version(ANTHROPIC_VERSION_LATEST)
         .build()?;
 
-    let agent = client
-        .agent("claude-sonnet-4-6")
-        .preamble("You are an helpful agent.")
-        .build();
+    // Anthropic latest model has 1M token context window, so we set max_token, which
+    // is threshold of compaction, 70% of it.
+    let mut main_memory = memory::ConversationMemory::new(700_000);
 
-    let response = agent.prompt("Hello!, who are you?").await?;
+    let mut user_buf = String::new();
+    let max_tokens = main_memory.max_tokens();
+    let mut current_tokens: u64;
+    loop {
+        print!("\nYou: ");
+        io::stdout().flush()?;
 
-    println!("{response}");
+        user_buf.clear();
+        io::stdin()
+            .read_line(&mut user_buf)
+            .expect("Failed to read line");
+
+        let input = user_buf.trim();
+        if input == "exit" {
+            break;
+        }
+        if input.is_empty() {
+            continue;
+        }
+
+        main_memory.push_user(input);
+
+        let agent = client
+            .agent("claude-sonnet-4-6")
+            .preamble(SYSTEM_PROMPT)
+            .build();
+
+        let response = agent
+            .completion(input.to_string(), main_memory.messages().to_vec())
+            .await?
+            .send()
+            .await?;
+
+        println!("\nAssistant: {}", util::extract_text(&response.choice));
+        main_memory.push_assistant(&response);
+        current_tokens = main_memory.current_tokens();
+        println!("Token Usage: {} / {}", current_tokens, max_tokens);
+    }
 
     Ok(())
 }

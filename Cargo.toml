@@ -6,8 +6,5 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.102"
 dotenvy = "0.15"
-reqwest = "0.13.2"
 rig-core = "0.33.0"
-serde_json = "1.0.149"
 tokio = { version = "1.50.0", features = ["full"] }
-uuid = "1.22.0"
