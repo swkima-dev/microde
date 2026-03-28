@@ -8,15 +8,10 @@ use std::{
 };
 
 #[derive(Deserialize)]
-pub enum ReadArgs {
-    Directory {
-        path: String,
-    },
-    File {
-        path: String,
-        offset: usize,
-        limit: usize,
-    },
+pub struct ReadArgs {
+    path: String,
+    offset: Option<usize>,
+    limit: Option<usize>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -36,7 +31,7 @@ impl Tool for Read {
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "path": { "type": "object", "description": "File or directory path to search"},
+                    "path": { "type": "string", "description": "File or directory path to search"},
                     "offset": { "type": "number", "description": "Offset when reading a file"},
                     "limit": { "type": "number", "description": "Number of lines to read from the file"}
                 },
@@ -46,38 +41,36 @@ impl Tool for Read {
     }
 
     async fn call(&self, args: ReadArgs) -> Result<Self::Output, Self::Error> {
-        match args {
-            ReadArgs::Directory { path } => {
-                let mut joined_string = String::new();
+        let metadata = fs::metadata(&args.path)?;
 
-                for entry_result in fs::read_dir(path)? {
-                    let entry = entry_result?;
-                    joined_string.push_str(format!("{:?}", entry.path()).as_str());
-                }
+        if metadata.is_dir() {
+            let mut joined_string = String::new();
 
-                Ok(joined_string)
+            for entry_result in fs::read_dir(&args.path)? {
+                let entry = entry_result?;
+                joined_string.push_str(format!("{:?}", entry.path()).as_str());
             }
-            ReadArgs::File {
-                path,
-                offset,
-                limit,
-            } => {
-                const DEFAULT_LIMIT: usize = 2000;
-                let file = File::open(path)?;
-                let reader = BufReader::new(file);
 
-                let lines = reader.lines().skip(offset).take(min(limit, DEFAULT_LIMIT));
+            Ok(joined_string)
+        } else {
+            const DEFAULT_LIMIT: usize = 2000;
+            let offset = args.offset.unwrap_or(0);
+            let limit = args.limit.unwrap_or(DEFAULT_LIMIT);
 
-                let mut joined_string = String::new();
+            let file = File::open(&args.path)?;
+            let reader = BufReader::new(file);
 
-                for line_result in lines {
-                    let line = line_result?;
-                    joined_string.push_str(&line);
-                    joined_string.push_str("\n");
-                }
+            let lines = reader.lines().skip(offset).take(min(limit, DEFAULT_LIMIT));
 
-                Ok(joined_string)
+            let mut joined_string = String::new();
+
+            for line_result in lines {
+                let line = line_result?;
+                joined_string.push_str(&line);
+                joined_string.push_str("\n");
             }
+
+            Ok(joined_string)
         }
     }
 }

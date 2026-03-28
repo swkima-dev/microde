@@ -2,6 +2,7 @@ mod memory;
 mod tool;
 mod util;
 
+use std::env;
 use std::io::{self, Write};
 
 use rig::client::CompletionClient;
@@ -34,6 +35,8 @@ async fn main() -> Result<(), anyhow::Error> {
     main_tool.add_tool(Grep);
     main_tool.add_tool(Grob);
 
+    let workspace_root_folder = env::current_dir()?;
+
     loop {
         print!("\nYou: ");
         io::stdout().flush()?;
@@ -50,12 +53,19 @@ async fn main() -> Result<(), anyhow::Error> {
         if input.is_empty() {
             continue;
         }
-
         main_memory.push_user(input.as_str());
+
+        let working_directory = env::current_dir()?;
+        let environment_prompt = format!(
+            "<env>
+                Working directory: {working_directory:?}
+                Workspace root folder: {workspace_root_folder:?}
+            </env>"
+        );
 
         let agent = client
             .agent("claude-sonnet-4-6")
-            .preamble(SYSTEM_PROMPT)
+            .preamble(format!("{}\n{}", SYSTEM_PROMPT, environment_prompt).as_str())
             .tool(Read)
             .tool(Grep)
             .tool(Grob)
