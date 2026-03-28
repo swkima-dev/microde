@@ -1,13 +1,17 @@
 mod memory;
+mod tool;
 mod util;
 
 use std::io::{self, Write};
 
 use rig::client::CompletionClient;
 use rig::completion::Completion;
+use rig::message::AssistantContent;
 use rig::providers::anthropic::{Client, completion::ANTHROPIC_VERSION_LATEST};
+use rig::tool::ToolSet;
+use tool::{grep::Grep, grob::Grob, read::Read};
 
-const SYSTEM_PROMPT: &str = "You are a helpful chatbot for casual conversation.";
+const SYSTEM_PROMPT: &str = "You are a helpful chatbot.";
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -25,6 +29,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut user_buf = String::new();
     let max_tokens = main_memory.max_tokens();
     let mut current_tokens: u64;
+    let mut main_tool = ToolSet::default();
+    main_tool.add_tool(Read);
+    main_tool.add_tool(Grep);
+    main_tool.add_tool(Grob);
+
     loop {
         print!("\nYou: ");
         io::stdout().flush()?;
@@ -34,7 +43,7 @@ async fn main() -> Result<(), anyhow::Error> {
             .read_line(&mut user_buf)
             .expect("Failed to read line");
 
-        let input = user_buf.trim();
+        let input = user_buf.trim().to_string(); // inputの借用がきれいでない。後でリファクタリング
         if input == "exit" {
             break;
         }
@@ -42,23 +51,72 @@ async fn main() -> Result<(), anyhow::Error> {
             continue;
         }
 
-        main_memory.push_user(input);
+        main_memory.push_user(input.as_str());
 
         let agent = client
             .agent("claude-sonnet-4-6")
             .preamble(SYSTEM_PROMPT)
+            .tool(Read)
+            .tool(Grep)
+            .tool(Grob)
             .build();
 
-        let response = agent
-            .completion(input.to_string(), main_memory.messages().to_vec())
-            .await?
-            .send()
-            .await?;
+        loop {
+            let response = agent
+                .completion(input.to_string(), main_memory.messages().to_vec())
+                .await?
+                .send()
+                .await?;
 
-        println!("\nAssistant: {}", util::extract_text(&response.choice));
-        main_memory.push_assistant(&response);
-        current_tokens = main_memory.current_tokens();
-        println!("Token Usage: {} / {}", current_tokens, max_tokens);
+            println!("\nAssistant: {}", util::extract_text(&response.choice));
+            main_memory.push_assistant(&response);
+            current_tokens = main_memory.current_tokens();
+            println!("Token Usage: {} / {}", current_tokens, max_tokens);
+
+            let has_tool_calls = response
+                .choice
+                .iter()
+                .any(|c| matches!(c, AssistantContent::ToolCall(_)));
+
+            if !has_tool_calls {
+                break;
+            };
+
+            for content in response.choice.iter() {
+                match content {
+                    AssistantContent::ToolCall(tool_call) => {
+                        let name = &tool_call.function.name;
+                        let args = &tool_call.function.arguments;
+                        print!(
+                            "APPROVE?: Agent ask you to use {:?}({:?}). y/n ",
+                            name, args
+                        );
+                        io::stdout().flush()?;
+
+                        user_buf.clear();
+                        io::stdin()
+                            .read_line(&mut user_buf)
+                            .expect("Failed to read line");
+
+                        let input = user_buf.trim();
+                        if input == "y" {
+                            let result = main_tool.call(&name, args.to_string()).await?;
+                            main_memory.push_tool_result(&tool_call.id, result);
+                        } else {
+                            main_memory.push_user(
+                                format!(
+                                    "Tool use was denied by user. Denied tool call: {}, {}",
+                                    name,
+                                    args.to_string()
+                                )
+                                .as_str(),
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
     }
 
     Ok(())
