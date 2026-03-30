@@ -1,0 +1,8 @@
+Create a new file or completely replace an existing file on the local file system.
+
+Usage:
+- The filePath parameter should be an absolute path.
+- If you specify a path where a file already exists, the entire file will be replaced. 
+The necessary parent directory is automatically created when writing files. It also supports the creation of multiple directory levels.
+- Use the grep tool to find specific content in large files or files with long lines.
+- If you are unsure of the correct file path, use the glob tool to look up filenames by glob pattern.

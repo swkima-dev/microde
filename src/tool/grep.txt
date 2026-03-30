@@ -1,0 +1,9 @@
+Search for lines matching a regex pattern in a file or directory.
+
+Usage:
+- The pattern parameter is a regular expression (Rust regex syntax).
+- The path parameter should be an absolute path to a file or directory.
+- If path is a directory, all files within it are searched recursively.
+- Results are returned in the format `<path>:<line_number>: <line_content>`.
+- Use this tool to find specific content in files.
+- Use the grob tool to find files by name pattern first if you are unsure of the path.

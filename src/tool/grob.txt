@@ -1,0 +1,8 @@
+Find files matching a glob pattern on the local filesystem.
+
+Usage:
+- The pattern parameter is a glob pattern (e.g. "src/**/*.rs", "**/*.toml").
+- Returns matching file paths, one per line, sorted by path.
+- Use `**` to match across directories recursively.
+- Use this tool to discover file paths before reading or searching them.
+- If you are unsure of the correct file path, use this tool to look up filenames by pattern.

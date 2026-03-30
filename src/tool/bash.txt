@@ -1,0 +1,11 @@
+Execute a bash command and return its output.
+
+Usage:
+- The command parameter is a shell command string to execute.
+- The command is executed using `bash -c` in the working directory.
+- Both stdout and stderr are captured and returned.
+- The timeout parameter (in milliseconds) limits execution time. Default is 120000ms (2 minutes). Maximum is 600000ms (10 minutes).
+- If the command exceeds the timeout, it is killed and an error is returned.
+- Use this tool for running build commands, tests, git operations, and other shell tasks.
+- Avoid using this tool when a more specific tool (read, write, grep, grob) can accomplish the task.
+- Be cautious with destructive commands. The user will be prompted to approve each tool call.
