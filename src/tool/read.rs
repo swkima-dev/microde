@@ -67,7 +67,7 @@ impl Tool for Read {
             for line_result in lines {
                 let line = line_result?;
                 joined_string.push_str(&line);
-                joined_string.push_str("\n");
+                joined_string.push('\n');
             }
 
             Ok(joined_string)

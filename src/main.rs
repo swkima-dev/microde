@@ -101,34 +101,30 @@ async fn main() -> Result<(), anyhow::Error> {
             };
 
             for content in response.choice.iter() {
-                match content {
-                    AssistantContent::ToolCall(tool_call) => {
-                        let name = &tool_call.function.name;
-                        let args = &tool_call.function.arguments;
-                        print!("APPROVE?: Agent ask you to use {}({}). y/n ", name, args);
-                        io::stdout().flush()?;
+                if let AssistantContent::ToolCall(tool_call) = content {
+                    let name = &tool_call.function.name;
+                    let args = &tool_call.function.arguments;
+                    print!("APPROVE?: Agent ask you to use {}({}). y/n ", name, args);
+                    io::stdout().flush()?;
 
-                        user_buf.clear();
-                        io::stdin()
-                            .read_line(&mut user_buf)
-                            .expect("Failed to read line");
+                    user_buf.clear();
+                    io::stdin()
+                        .read_line(&mut user_buf)
+                        .expect("Failed to read line");
 
-                        let input = user_buf.trim();
-                        if input == "y" {
-                            let result = main_tool.call(&name, args.to_string()).await?;
-                            main_memory.push_tool_result(&tool_call.id, result);
-                        } else {
-                            main_memory.push_tool_result(
-                                &tool_call.id,
-                                format!(
-                                    "Tool use was denied by user. Denied tool call: {}, {}",
-                                    name,
-                                    args.to_string()
-                                ),
-                            );
-                        }
+                    let input = user_buf.trim();
+                    if input == "y" {
+                        let result = main_tool.call(name, args.to_string()).await?;
+                        main_memory.push_tool_result(&tool_call.id, result);
+                    } else {
+                        main_memory.push_tool_result(
+                            &tool_call.id,
+                            format!(
+                                "Tool use was denied by user. Denied tool call: {}, {}",
+                                name, args,
+                            ),
+                        );
                     }
-                    _ => {}
                 }
             }
         }

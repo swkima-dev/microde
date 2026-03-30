@@ -45,7 +45,7 @@ impl Tool for FullWrite {
             fs::create_dir_all(parent)?
         }
 
-        let mut file = File::create(&path)?;
+        let mut file = File::create(path)?;
 
         file.write_all(args.content.as_bytes())?;
 
