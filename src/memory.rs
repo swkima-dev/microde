@@ -45,6 +45,10 @@ impl ConversationMemory {
             })),
         });
     }
+
+    pub fn push(&mut self, message: Message) {
+        self.messages.push(message);
+    }
     pub fn messages(&self) -> &[Message] {
         &self.messages
     }

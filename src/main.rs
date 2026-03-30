@@ -10,7 +10,7 @@ use rig::completion::Completion;
 use rig::message::AssistantContent;
 use rig::providers::anthropic::{Client, completion::ANTHROPIC_VERSION_LATEST};
 use rig::tool::ToolSet;
-use tool::{grep::Grep, grob::Grob, read::Read};
+use tool::{bash::Bash, grep::Grep, grob::Grob, read::Read, write::FullWrite};
 
 const SYSTEM_PROMPT: &str = "You are a helpful chatbot.";
 
@@ -31,9 +31,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let max_tokens = main_memory.max_tokens();
     let mut current_tokens: u64;
     let mut main_tool = ToolSet::default();
+    main_tool.add_tool(Bash);
     main_tool.add_tool(Read);
     main_tool.add_tool(Grep);
     main_tool.add_tool(Grob);
+    main_tool.add_tool(FullWrite);
 
     let workspace_root_folder = env::current_dir()?;
 
@@ -66,14 +68,20 @@ async fn main() -> Result<(), anyhow::Error> {
         let agent = client
             .agent("claude-sonnet-4-6")
             .preamble(format!("{}\n{}", SYSTEM_PROMPT, environment_prompt).as_str())
+            .tool(Bash)
             .tool(Read)
             .tool(Grep)
             .tool(Grob)
+            .tool(FullWrite)
             .build();
 
         loop {
+            let messages = main_memory.messages();
+            let (prompt, history) = messages.split_last().expect("messages should not be empty");
+            let prompt = prompt.clone();
+
             let response = agent
-                .completion(input.to_string(), main_memory.messages().to_vec())
+                .completion(prompt, history.to_vec())
                 .await?
                 .send()
                 .await?;
@@ -97,10 +105,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     AssistantContent::ToolCall(tool_call) => {
                         let name = &tool_call.function.name;
                         let args = &tool_call.function.arguments;
-                        print!(
-                            "APPROVE?: Agent ask you to use {:?}({:?}). y/n ",
-                            name, args
-                        );
+                        print!("APPROVE?: Agent ask you to use {}({}). y/n ", name, args);
                         io::stdout().flush()?;
 
                         user_buf.clear();
@@ -113,13 +118,13 @@ async fn main() -> Result<(), anyhow::Error> {
                             let result = main_tool.call(&name, args.to_string()).await?;
                             main_memory.push_tool_result(&tool_call.id, result);
                         } else {
-                            main_memory.push_user(
+                            main_memory.push_tool_result(
+                                &tool_call.id,
                                 format!(
                                     "Tool use was denied by user. Denied tool call: {}, {}",
                                     name,
                                     args.to_string()
-                                )
-                                .as_str(),
+                                ),
                             );
                         }
                     }
