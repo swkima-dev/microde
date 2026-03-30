@@ -45,7 +45,6 @@ impl SystemContexts {
         self
     }
 
-    #[allow(dead_code)]
     pub fn reload_instruction(&mut self) -> &mut Self {
         self.instruction = Self::find_instruction_file(&self.workspace_root_dir);
         self
