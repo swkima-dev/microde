@@ -1,5 +1,5 @@
-use rig::{completion::ToolDefinition, tool::Tool};
 use regex::Regex;
+use rig::{completion::ToolDefinition, tool::Tool};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{self, BufRead, BufReader};

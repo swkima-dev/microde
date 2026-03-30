@@ -88,10 +88,7 @@ impl Tool for Bash {
             Ok(Err(e)) => Err(e),
             Err(_) => Err(io::Error::new(
                 io::ErrorKind::TimedOut,
-                format!(
-                    "Command timed out after {}ms: {}",
-                    timeout_ms, args.command
-                ),
+                format!("Command timed out after {}ms: {}", timeout_ms, args.command),
             )),
         }
     }
