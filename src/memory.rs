@@ -10,7 +10,6 @@ pub struct ConversationMemory {
     current_tokens: u64,
 }
 
-#[allow(dead_code)]
 impl ConversationMemory {
     pub fn new(max_tokens: u64) -> Self {
         Self {
@@ -46,9 +45,6 @@ impl ConversationMemory {
         });
     }
 
-    pub fn push(&mut self, message: Message) {
-        self.messages.push(message);
-    }
     pub fn messages(&self) -> &[Message] {
         &self.messages
     }

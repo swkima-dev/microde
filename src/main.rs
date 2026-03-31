@@ -1,4 +1,5 @@
 mod memory;
+mod subagent;
 mod system_context;
 mod tool;
 mod util;
@@ -123,6 +124,15 @@ async fn main() -> Result<(), anyhow::Error> {
                     }
                 }
             }
+        }
+
+        if main_memory.should_compact() {
+            println!("COMPACTION occurs");
+            let summary =
+                subagent::compaction::compaction(client.clone(), main_memory.messages()).await?;
+            main_memory.clear();
+            main_memory.push_system(&summary);
+            println!("COMPACTION success");
         }
     }
 
