@@ -4,8 +4,7 @@ mod system_context;
 mod tool;
 mod util;
 
-use std::io::{self, Write};
-
+use cliclack::{confirm, input, intro, log, outro, spinner};
 use rig::client::CompletionClient;
 use rig::completion::Completion;
 use rig::message::AssistantContent;
@@ -17,6 +16,9 @@ use tool::{bash::Bash, grep::Grep, grob::Grob, read::Read, write::FullWrite};
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     dotenvy::from_filename(".env.local").ok();
+
+    intro(include_str!("logo.txt"))?;
+
     let api_key = &std::env::var("ANTHROPIC_API_KEY")?;
     let client = Client::builder()
         .api_key(api_key)
@@ -27,7 +29,6 @@ async fn main() -> Result<(), anyhow::Error> {
     // is threshold of compaction, 70% of it.
     let mut main_memory = memory::ConversationMemory::new(700_000);
 
-    let mut user_buf = String::new();
     let max_tokens = main_memory.max_tokens();
     let mut current_tokens: u64;
     let mut main_tool = ToolSet::default();
@@ -40,22 +41,19 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut system_prompt = SystemContexts::new();
 
     loop {
-        print!("\nYou: ");
-        io::stdout().flush()?;
-
-        user_buf.clear();
-        io::stdin()
-            .read_line(&mut user_buf)
-            .expect("Failed to read line");
-
-        let input = user_buf.trim().to_string(); // inputの借用がきれいでない。後でリファクタリング
-        if input == "exit" {
+        let user_input: String = input("User:")
+            .placeholder("Type your message... (type 'exit' to quit)")
+            .multiline()
+            .interact()?;
+        let user_input = user_input.trim().to_string();
+        if user_input == "exit" {
+            outro("Goodbye!")?;
             break;
         }
-        if input.is_empty() {
+        if user_input.is_empty() {
             continue;
         }
-        main_memory.push_user(input.as_str());
+        main_memory.push_user(user_input.as_str());
 
         let agent = client
             .agent("claude-sonnet-4-6")
@@ -77,16 +75,22 @@ async fn main() -> Result<(), anyhow::Error> {
             let (prompt, history) = messages.split_last().expect("messages should not be empty");
             let prompt = prompt.clone();
 
+            let sp = spinner();
+            sp.start("Thinking...");
             let response = agent
                 .completion(prompt, history.to_vec())
                 .await?
                 .send()
                 .await?;
+            sp.stop("Done");
 
-            println!("\nAssistant: {}", util::extract_text(&response.choice));
+            let text = util::extract_text(&response.choice);
+            if !text.is_empty() {
+                log::info(format!("Assistant\n{}", text))?;
+            }
             main_memory.push_assistant(&response);
             current_tokens = main_memory.current_tokens();
-            println!("Token Usage: {} / {}", current_tokens, max_tokens);
+            log::remark(format!("Token Usage: {} / {}", current_tokens, max_tokens))?;
 
             let has_tool_calls = response
                 .choice
@@ -101,19 +105,19 @@ async fn main() -> Result<(), anyhow::Error> {
                 if let AssistantContent::ToolCall(tool_call) = content {
                     let name = &tool_call.function.name;
                     let args = &tool_call.function.arguments;
-                    print!("APPROVE?: Agent ask you to use {}({}). y/n ", name, args);
-                    io::stdout().flush()?;
 
-                    user_buf.clear();
-                    io::stdin()
-                        .read_line(&mut user_buf)
-                        .expect("Failed to read line");
+                    let approved = confirm(format!("Allow tool call: {name}({args})"))
+                        .initial_value(true)
+                        .interact()?;
 
-                    let input = user_buf.trim();
-                    if input == "y" {
+                    if approved {
+                        let sp = spinner();
+                        sp.start(format!("Running {name}..."));
                         let result = main_tool.call(name, args.to_string()).await?;
+                        sp.stop(format!("{name} completed"));
                         main_memory.push_tool_result(&tool_call.id, result);
                     } else {
+                        log::warning("Tool call denied")?;
                         main_memory.push_tool_result(
                             &tool_call.id,
                             format!(
@@ -127,15 +131,19 @@ async fn main() -> Result<(), anyhow::Error> {
         }
 
         if main_memory.should_compact() {
-            println!("COMPACTION occurs");
+            let sp = spinner();
+            sp.start("Compacting conversation history...");
             match subagent::compaction::compaction(&client, main_memory.messages()).await {
                 Ok(summary) => {
                     main_memory.clear();
                     main_memory.push_system(&summary);
-                    println!("COMPACTION success");
+                    sp.stop("Compaction completed");
                 }
                 Err(e) => {
-                    eprintln!("Compaction failed, continuing with full history: {e}");
+                    sp.stop("Compaction failed");
+                    log::warning(format!(
+                        "Compaction failed, continuing with full history: {e}"
+                    ))?;
                 }
             }
         }
