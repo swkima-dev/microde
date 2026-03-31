@@ -7,7 +7,7 @@ use rig::providers::anthropic::client::AnthropicExt;
 use crate::util;
 
 pub async fn compaction(
-    client: Client<AnthropicExt>,
+    client: &Client<AnthropicExt>,
     messages: &[Message],
 ) -> anyhow::Result<String> {
     let system_prompt = include_str!("compaction.txt").to_string();

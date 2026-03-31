@@ -128,11 +128,16 @@ async fn main() -> Result<(), anyhow::Error> {
 
         if main_memory.should_compact() {
             println!("COMPACTION occurs");
-            let summary =
-                subagent::compaction::compaction(client.clone(), main_memory.messages()).await?;
-            main_memory.clear();
-            main_memory.push_system(&summary);
-            println!("COMPACTION success");
+            match subagent::compaction::compaction(&client, main_memory.messages()).await {
+                Ok(summary) => {
+                    main_memory.clear();
+                    main_memory.push_system(&summary);
+                    println!("COMPACTION success");
+                }
+                Err(e) => {
+                    eprintln!("Compaction failed, continuing with full history: {e}");
+                }
+            }
         }
     }
 
