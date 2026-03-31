@@ -16,6 +16,7 @@ use tool::{bash::Bash, grep::Grep, grob::Grob, read::Read, write::FullWrite};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    println!(include_str!("logo.txt"));
     dotenvy::from_filename(".env.local").ok();
     let api_key = &std::env::var("ANTHROPIC_API_KEY")?;
     let client = Client::builder()
