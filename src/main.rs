@@ -1,8 +1,9 @@
 mod memory;
+mod subagent;
+mod system_context;
 mod tool;
 mod util;
 
-use std::env;
 use std::io::{self, Write};
 
 use rig::client::CompletionClient;
@@ -10,9 +11,8 @@ use rig::completion::Completion;
 use rig::message::AssistantContent;
 use rig::providers::anthropic::{Client, completion::ANTHROPIC_VERSION_LATEST};
 use rig::tool::ToolSet;
+use system_context::SystemContexts;
 use tool::{bash::Bash, grep::Grep, grob::Grob, read::Read, write::FullWrite};
-
-const SYSTEM_PROMPT: &str = "You are a helpful chatbot.";
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -37,7 +37,7 @@ async fn main() -> Result<(), anyhow::Error> {
     main_tool.add_tool(Grob);
     main_tool.add_tool(FullWrite);
 
-    let workspace_root_folder = env::current_dir()?;
+    let mut system_prompt = SystemContexts::new();
 
     loop {
         print!("\nYou: ");
@@ -57,17 +57,14 @@ async fn main() -> Result<(), anyhow::Error> {
         }
         main_memory.push_user(input.as_str());
 
-        let working_directory = env::current_dir()?;
-        let environment_prompt = format!(
-            "<env>
-                Working directory: {working_directory:?}
-                Workspace root folder: {workspace_root_folder:?}
-            </env>"
-        );
-
         let agent = client
             .agent("claude-sonnet-4-6")
-            .preamble(format!("{}\n{}", SYSTEM_PROMPT, environment_prompt).as_str())
+            .preamble(
+                &system_prompt
+                    .update_working_dir()
+                    .reload_instruction()
+                    .prompt(),
+            )
             .tool(Bash)
             .tool(Read)
             .tool(Grep)
@@ -125,6 +122,20 @@ async fn main() -> Result<(), anyhow::Error> {
                             ),
                         );
                     }
+                }
+            }
+        }
+
+        if main_memory.should_compact() {
+            println!("COMPACTION occurs");
+            match subagent::compaction::compaction(&client, main_memory.messages()).await {
+                Ok(summary) => {
+                    main_memory.clear();
+                    main_memory.push_system(&summary);
+                    println!("COMPACTION success");
+                }
+                Err(e) => {
+                    eprintln!("Compaction failed, continuing with full history: {e}");
                 }
             }
         }
