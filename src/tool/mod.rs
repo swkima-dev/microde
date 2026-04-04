@@ -1,5 +1,5 @@
 pub mod bash;
+pub mod glob;
 pub mod grep;
-pub mod grob;
 pub mod read;
 pub mod write;

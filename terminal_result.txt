@@ -1,0 +1,486 @@
+ ❯ cargo run --manifest-path ../microde/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running `/home/swkima/Develop/microde/target/debug/microde`
+┌
+ ███╗   ███╗ ██╗  ██████╗ ██████╗   ██████╗  ██████╗  ███████╗
+ ████╗ ████║ ██║ ██╔════╝ ██╔══██╗ ██╔═══██╗ ██╔══██╗ ██╔════╝
+ ██╔████╔██║ ██║ ██║      ██████╔╝ ██║   ██║ ██║  ██║ █████╗
+ ██║╚██╔╝██║ ██║ ██║      ██╔══██╗ ██║   ██║ ██║  ██║ ██╔══╝
+ ██║ ╚═╝ ██║ ██║ ╚██████╗ ██║  ██║ ╚██████╔╝ ██████╔╝ ███████╗
+ ╚═╝     ╚═╝ ╚═╝  ╚═════╝ ╚═╝  ╚═╝  ╚═════╝  ╚═════╝  ╚══════╝
+
+│
+◇  User:
+│  pythonでブロック崩しを作ってください。
+│
+◇  Done
+│
+●  Assistant
+│  ブロック崩しゲームをPythonで作成します！`pygame`ライブラリを使って実装します。
+│                                                                                                                                                                                            ├  Token Usage: 2023 / 700000
+│
+◇  Allow tool call: bash({"command":"cd /home/swkima/Develop/playground && pip show pygame 2>/dev/null || pip install pygame"})
+│  No
+│
+▲  Tool call denied
+│
+◇  Done
+│
+├  Token Usage: 7346 / 700000
+│
+◆  Allow tool call: write({"content":"import pygame\nimport sys\nimport random\nimport math\n\n# ==================== 定数 ====================\nSCREEN_WIDTH  = 800\nSCREEN_HEIGHT = 600\nFPS           = 60\n\n# 色定義\nBLACK      = (0,   0,   0)\nWHITE      = (255, 255, 255)\nGRAY       = (50,  50,  50)\nDARK_GRAY  = (30,  30,  30)\nCYAN       = (0,   230, 230)\nORANGE     = (255, 140, 0)\nYELLOW     = (255, 220, 0)\nGREEN      = (50,  200, 80)\nRED        = (220, 60,  60)\nPURPLE     = (160, 60,  220)\nBLUE       = (60,  120, 220)\nPINK       = (255, 100, 180)\n\nBLOCK_COLORS = [RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, PINK]\n\n# ブロック設定\nBLOCK_COLS    = 10\nBLOCK_ROWS    = 6\nBLOCK_WIDTH   = 68\nBLOCK_HEIGHT  = 24\nBLOCK_PADDING = 6\nBLOCK_OFFSET_X = (SCREEN_WIDTH - (BLOCK_COLS * (BLOCK_WIDTH + BLOCK_PADDING) - BLOCK_PADDING)) // 2\nBLOCK_OFFSET_Y = 60\n\n# パドル設定\nPADDLE_WIDTH  = 100\nPADDLE_HEIGHT = 14\nPADDLE_Y      = SCREEN_HEIGHT - 60\nPADDLE_SPEED  = 7\n\n# ボール設定\nBALL_RADIUS   = 9\nBALL_SPEED    = 5.5\n\n# ==================== ブロッククラス ====================\nclass Block:\ndef __init__(self, x, y, color, durability=1):\n        self.rect       = pygame.Rect(x, y, BLOCK_WIDTH, BLOCK_HEIGHT)\n        self.color      = color\n        self.durability = durability   # 1 or 2\n        self.alive      = True\n        self.hit_flash  = 0            # ヒット時の白フラッシュ用タイマー\n\n    def draw(self, surface):\n        if not self.alive:\n            return\n        draw_color = WHITE if self.hit_flash > 0 else self.color\n        # 本体\n        pygame.draw.rect(surface, draw_color, self.rect, border_radius=5)\n        # ハイライ
+ト（上辺・左辺）\n        highlight = tuple(min(c + 80, 255) for c in draw_color)\n        pygame.draw.line(surface, highlight,\n                         (self.rect.left + 4, self.rect.top + 3),\n                         (self.rect.right - 4, self.rect.top + 3), 2)\n        # 耐久度 2 のブロックは縁取りを太く\n        border_color = WHITE if self.durability == 2 else DARK_GRAY\n        pygame.draw.rect(surface, border_color, self.rect, 2, border_radius=5)\n        if self.hit_flash > 0:\n            self.hit_flash -= 1\n\n    def hit(self):\n        self.durability -= 1\n        self.hit_flash = 4\n        if self.durability <= 0:\n            self.alive = False\n            return True   # 破壊\n        return False\n\n\n# ==================== パドルクラス ====================\nclass Paddle:\n    def __init__(self):\n        self.rect = pygame.Rect(\n            (SCREEN_WIDTH - PADDLE_WIDTH) // 2,\n            PADDLE_Y,\n            PADDLE_WIDTH,\n            PADDLE_HEIGHT\n        )\n\n    def update(self, keys):\n        if keys[pygame.K_LEFT]  or keys[pygame.K_a]:\n            self.rect.x -= PADDLE_SPEED\n       if keys[pygame.K_RIGHT] or keys[pygame.K_d]:\n            self.rect.x += PADDLE_SPEED\n        self.rect.clamp_ip(pygame.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))\n\n    def draw(self, surface):\n        pygame.draw.rect(surface, CYAN, self.rect, border_radius=7)\n        highlight = (180, 255, 255)\n        pygame.draw.line(surface, highlight,\n                         (self.rect.left + 6, self.rect.top + 3),\n                         (self.rect.right - 6, self.rect.top + 3), 2)\n\n\n# ==================== ボールクラス ====================\nclass Ball:\n    def __init__(self, x, y):\n        self.x  = float(x)\n        self.y  = float(y)\n        angle   = random.uniform(math.radians(220), math.radians(320))\n        self.vx = BALL_SPEED * math.cos(angle)\n        self.vy = BALL_SPEED * math.sin(angle)\n        self.radius = BALL_RADIUS\n        self.alive  = True\n        self.trail  = []   # 残像リスト\n\n    def update(self):\n        self.trail.append((int(self.x), int(self.y)))\n        if len(self.trail) > 8:\n            self.trail.pop(0)\n\n        self.x += self.vx\n        self.y += self.vy\n\n        # 左右の壁\n        if self.x - self.radius <= 0:\n            self.x  = self.radius\n            self.vx = abs(self.vx)\n        if self.x + self.radius >= SCREEN_WIDTH:\n            self.x  = SCREEN_WIDTH - self.radius\n            self.vx = -abs(self.vx)\n        # 上の壁\n        if self.y - self.radius <= 0:\n            self.y  = self.radius\n            self.vy = abs(self.vy)\n        # 下に落下\n        if self.y - self.radius > SCREEN_HEIGHT:\n            self.alive = False\n\n    def draw(self, surface):\n        # 残像\n        for i, (tx, ty) in enumerate(self.trail):\n            alpha  = int(200 * (i + 1) / len(self.trail)) if self.trail else 0\n            radius = max(2, self.radius - (len(self.trail) - i))\n            trail_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)\n            pygame.draw.circle(trail_surf, (*CYAN[:3], alpha), (radius, radius), radius)\n            surface.blit(trail_surf, (tx - radius, ty - radius))\n        # 本体\n        pygame.draw.circle(surface, WHITE, (int(self.x), int(self.y)), self.radius)\n        pygame.draw.circle(surface, CYAN,  (int(self.x), int(self.y)), self.radius, 3)\n\n    @property\n    def rect(self):\n        return pygame.Rect(\n            int(self.x) - self.radius,\n            int(self.y) - self.radius,\n            self.radius * 2,\n            self.radius * 2\n        )\n\n    def reflect_paddle(self, paddle):\n        \"\"\"パドルの当たった位置によって反射角を変える\"\"\"\n        rel = (self.x - paddle.rect.centerx) / (paddle.rect.width / 2)\n        rel = max(-0.9, min(0.9, rel))\n        angle = math.radians(-150 + rel * 60)   # -150° ~ -90° ~ -30°\n        speed = math.hypot(self.vx, self.vy)\n        self.vx = speed * math.cos(angle)\n        self.vy = speed * math.sin(angle)\n        self.y  = paddle.rect.top - self.radius\n\n\n# ==================== パーティクルクラス ====================\nclass Particle:\n    def __init__(self, x, y, color):\n        angle  = random.uniform(0, math.pi * 2)\n        speed  = random.uniform(1.5, 5)\n        self.x  = float(x)\n        self.y  = float(y)\n        self.vx = speed * math.cos(angle)\n        self.vy = speed * math.sin(angle)\n        self.color  = color\n        self.life   = random.randint(20, 40)\n        self.radius = random.randint(2, 5)\n\n    def update(self):\n        self.x  += self.vx\n        self.y  += self.vy\n        self.vy += 0.15   # 重力\n        self.life -= 1\n\n    def draw(self, surface):\n        alpha = int(255 * self.life / 40)\n        r = max(1, self.radius)\n        s = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)\n        pygame.draw.circle(s, (*self.color[:3], alpha), (r, r), r)\n        surface.blit(s, (int(self.x) - r, int(self.y) - r))\n\n\n# ==================== ゲームクラス ============◆  Allow tool call: write({"content":"import pygame\nimport sys\nimport random\nimport math\n\n# ==================== 定数 ====================\nSCREEN_WIDTH  = 800\nSCREEN_HEIGHT = 600\nFPS           = 60\n\n# 色定義\nBLACK      = (0,   0,   0)\nWHITE      = (255, 255, 255)\nGRAY       = (50,  50,  50)\nDARK_GRAY  = (30,  30,  30)\nCYAN       = (0,   230, 230)\nORANGE     = (255, 140, 0)\nYELLOW     = (255, 220, 0)\nGREEN      = (50,  200, 80)\nRED        = (220, 60,  60)\nPURPLE     = (160, 60,  220)\nBLUE       = (60,  120, 220)\nPINK       = (255, 100, 180)\n\nBLOCK_COLORS = [RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, PINK]\n\n# ブロック設定\nBLOCK_COLS    = 10\nBLOCK_ROWS    = 6\nBLOCK_WIDTH   = 68\nBLOCK_HEIGHT  = 24\nBLOCK_PADDING = 6\nBLOCK_OFFSET_X = (SCREEN_WIDTH - (BLOCK_COLS * (BLOCK_WIDTH + BLOCK_PADDING) - BLOCK_PADDING)) // 2\nBLOCK_OFFSET_Y = 60\n\n# パドル設定\nPADDLE_WIDTH  = 100\nPADDLE_HEIGHT = 14\nPADDLE_Y      = SCREEN_HEIGHT - 60\nPADDLE_SPEED  = 7\n\n# ボール設定\nBALL_RADIUS   = 9\nBALL_SPEED    = 5.5\n\n# ==================== ブロッククラス ====================\nclass Block:\n    def __init__(self, x, y, color, durability=1):\n        self.rect       = pygame.Rect(x, y, BLOCK_WIDTH, BLOCK_HEIGHT)\n        self.color      = color\n        self.durability = durability   # 1 or 2\n        self.alive      = True\n        self.hit_flash  = 0            # ヒット時の白フラッシュ用タイマー\n\n    def draw(self, surface):\n        if not self.alive:\n            return\n        draw_color = WHITE if self.hit_flash > 0 else self.color\n        # 本体\n        pygame.draw.rect(surface, draw_color, self.rect, border_radius=5)\n        # ハイライ
+ト（上辺・左辺）\n        highlight = tuple(min(c + 80, 255) for c in draw_color)\n        pygame.draw.line(surface, highlight,\n                         (self.rect.left + 4, self.rect.top + 3),\n                         (self.rect.right - 4, self.rect.top + 3), 2)\n        # 耐久度 2 のブロックは縁取りを太く\n        border_color = WHITE if self.durability == 2 else DARK_GRAY\n        pygame.draw.rect(surface, border_color, self.rect, 2, border_radius=5)\n        if self.hit_flash > 0:\n            self.hit_flash -= 1\n\n    def hit(self):\n        self.durability -= 1\n        self.hit_flash = 4\n        if self.durability <= 0:\n            self.alive = False\n            return True   # 破壊\n        return False\n\n\n# ==================== パドルクラス ====================\nclass Paddle:\n    def __init__(self):\n        self.rect = pygame.Rect(\n            (SCREEN_WIDTH - PADDLE_WIDTH) // 2,\n            PADDLE_Y,\n            PADDLE_WIDTH,\n            PADDLE_HEIGHT\n        )\n\n    def update(self, keys):\n        if keys[pygame.K_LEFT]  or keys[pygame.K_a]:\n            self.rect.x -= PADDLE_SPEED\n       if keys[pygame.K_RIGHT] or keys[pygame.K_d]:\n            self.rect.x += PADDLE_SPEED\n        self.rect.clamp_ip(pygame.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))\n\n    def draw(self, surface):\n        pygame.draw.rect(surface, CYAN, self.rect, border_radius=7)\n        highlight = (180, 255, 255)\n        pygame.draw.line(surface, highlight,\n                         (self.rect.left + 6, self.rect.top + 3),\n                         (self.rect.right - 6, self.rect.top + 3), 2)\n\n\n# ==================== ボールクラス ====================\nclass Ball:\n    def __init__(self, x, y):\n        self.x  = float(x)\n        self.y  = float(y)\n        angle   = random.uniform(math.radians(220), math.radians(320))\n        self.vx = BALL_SPEED * math.cos(angle)\n        self.vy = BALL_SPEED * math.sin(angle)\n        self.radius = BALL_RADIUS\n        self.alive  = True\n        self.trail  = []   # 残像リスト\n\n    def update(self):\n        self.trail.append((int(self.x), int(self.y)))\n        if len(self.trail) > 8:\n            self.trail.pop(0)\n\n        self.x += self.vx\n        self.y += self.vy\n\n        # 左右の壁\n        if self.x - self.radius <= 0:\n            self.x  = self.radius\n            self.vx = abs(self.vx)\n        if self.x + self.radius >= SCREEN_WIDTH:\n            self.x  = SCREEN_WIDTH - self.radius\n            self.vx = -abs(self.vx)\n        # 上の壁\n        if self.y - self.radius <= 0:\n            self.y  = self.radius\n            self.vy = abs(self.vy)\n        # 下に落下\n        if self.y - self.radius > SCREEN_HEIGHT:\n            self.alive = False\n\n    def draw(self, surface):\n        # 残像\n        for i, (tx, ty) in enumerate(self.trail):\n            alpha  = int(200 * (i + 1) / len(self.trail)) if self.trail else 0\n            radius = max(2, self.radius - (len(self.trail) - i))\n            trail_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)\n            pygame.draw.circle(trail_surf, (*CYAN[:3], alpha), (radius, radius), radius)\n            surface.blit(trail_surf, (tx - radius, ty - radius))\n        # 本体\n        pygame.draw.circle(surface, WHITE, (int(self.x), int(self.y)), self.radius)\n        pygame.draw.circle(surface, CYAN,  (int(self.x), int(self.y)), self.radius, 3)\n\n    @property\n    def rect(self):\n        return pygame.Rect(\n            int(self.x) - self.radius,\n            int(self.y) - self.radius,\n            self.radius * 2,\n            self.radius * 2\n        )\n\n    def reflect_paddle(self, paddle):\n        \"\"\"パドルの当たった位置によって反射角を変える\"\"\"\n        rel = (self.x - paddle.rect.centerx) / (paddle.rect.width / 2)\n        rel = max(-0.9, min(0.9, rel))\n        angle = math.radians(-150 + rel * 60)   # -150° ~ -90° ~ -30°\n        speed = math.hypot(self.vx, self.vy)\n        self.vx = speed * math.cos(angle)\n        self.vy = speed * math.sin(angle)\n        self.y  = paddle.rect.top - self.radius\n\n\n# ==================== パーティクルクラス ====================\nclass Particle:\n    def __init__(self, x, y, color):\n        angle  = random.uniform(0, math.pi * 2)\n        speed  = random.uniform(1.5, 5)\n        self.x  = float(x)\n        self.y  = float(y)\n        self.vx = speed * math.cos(angle)\n        self.vy = speed * math.sin(angle)\n        self.color  = color\n        self.life   = random.randint(20, 40)\n        self.radius = random.randint(2, 5)\n\n    def update(self):\n        self.x  += self.vx\n        self.y  += self.vy\n        self.vy += 0.15   # 重力
+\n        self.life -= 1\n\n    def draw(self, surface):\n        alpha = int(255 * self.life / 40)\n        r = max(1, self.radius)\n        s = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)\n        pygame.draw.circle(s, (*self.color[:3], alpha), (r, r), r)\n        surface.blit(s, (int(self.x) - r, int(self.y) - r))\n\n\n# ==================== ゲームクラス ============◇  Allow tool call: write({"content":"import pygame\nimport sys\nimport random\nimport math\n\n# ==================== 定数 ====================\nSCREEN_WIDTH  = 800\nSCREEN_HEIGHT = 600\nFPS           = 60\n\n# 色定義\nBLACK      = (0,   0,   0)\nWHITE      = (255, 255, 255)\nGRAY       = (50,  50,  50)\nDARK_GRAY  = (30,  30,  30)\nCYAN       = (0,   230, 230)\nORANGE     = (255, 140, 0)\nYELLOW     = (255, 220, 0)\nGREEN      = (50,  200, 80)\nRED        = (220, 60,  60)\nPURPLE     = (160, 60,  220)\nBLUE       = (60,  120, 220)\nPINK       = (255, 100, 180)\n\nBLOCK_COLORS = [RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, PINK]\n\n# ブロック設定\nBLOCK_COLS    = 10\nBLOCK_ROWS    = 6\nBLOCK_WIDTH   = 68\nBLOCK_HEIGHT  = 24\nBLOCK_PADDING = 6\nBLOCK_OFFSET_X = (SCREEN_WIDTH - (BLOCK_COLS * (BLOCK_WIDTH + BLOCK_PADDING) - BLOCK_PADDING)) // 2\nBLOCK_OFFSET_Y = 60\n\n# パドル設定\nPADDLE_WIDTH  = 100\nPADDLE_HEIGHT = 14\nPADDLE_Y      = SCREEN_HEIGHT - 60\nPADDLE_SPEED  = 7\n\n# ボール設定\nBALL_RADIUS   = 9\nBALL_SPEED    = 5.5\n\n# ==================== ブロッククラス ====================\nclass Block:\n    def __init__(self, x, y, color, durability=1):\n        self.rect       = pygame.Rect(x, y, BLOCK_WIDTH, BLOCK_HEIGHT)\n        self.color      = color\n        self.durability = durability   # 1 or 2\n        self.alive      = True\n        self.hit_flash  = 0            # ヒット時の白フラッシュ用タイマー\n\n    def draw(self, surface):\n        if not self.alive:\n            return\n        draw_color = WHITE if self.hit_flash > 0 else self.color\n        # 本体\n        pygame.draw.rect(surface, draw_color, self.rect, border_radius=5)\n        # ハイライ
+ト（上辺・左辺）\n        highlight = tuple(min(c + 80, 255) for c in draw_color)\n        pygame.draw.line(surface, highlight,\n                         (self.rect.left + 4, self.rect.top + 3),\n                         (self.rect.right - 4, self.rect.top + 3), 2)\n        # 耐久度 2 のブロックは縁取りを太く\n        border_color = WHITE if self.durability == 2 else DARK_GRAY\n        pygame.draw.rect(surface, border_color, self.rect, 2, border_radius=5)\n        if self.hit_flash > 0:\n            self.hit_flash -= 1\n\n    def hit(self):\n        self.durability -= 1\n        self.hit_flash = 4\n        if self.durability <= 0:\n            self.alive = False\n            return True   # 破壊\n        return False\n\n\n# ==================== パドルクラス ====================\nclass Paddle:\n    def __init__(self):\n        self.rect = pygame.Rect(\n            (SCREEN_WIDTH - PADDLE_WIDTH) // 2,\n            PADDLE_Y,\n            PADDLE_WIDTH,\n            PADDLE_HEIGHT\n        )\n\n    def update(self, keys):\n        if keys[pygame.K_LEFT]  or keys[pygame.K_a]:\n            self.rect.x -= PADDLE_SPEED\n       if keys[pygame.K_RIGHT] or keys[pygame.K_d]:\n            self.rect.x += PADDLE_SPEED\n        self.rect.clamp_ip(pygame.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))\n\n    def draw(self, surface):\n        pygame.draw.rect(surface, CYAN, self.rect, border_radius=7)\n        highlight = (180, 255, 255)\n        pygame.draw.line(surface, highlight,\n                         (self.rect.left + 6, self.rect.top + 3),\n                         (self.rect.right - 6, self.rect.top + 3), 2)\n\n\n# ==================== ボールクラス ====================\nclass Ball:\n    def __init__(self, x, y):\n        self.x  = float(x)\n        self.y  = float(y)\n        angle   = random.uniform(math.radians(220), math.radians(320))\n        self.vx = BALL_SPEED * math.cos(angle)\n        self.vy = BALL_SPEED * math.sin(angle)\n        self.radius = BALL_RADIUS\n        self.alive  = True\n        self.trail  = []   # 残像リスト\n\n    def update(self):\n        self.trail.append((int(self.x), int(self.y)))\n        if len(self.trail) > 8:\n            self.trail.pop(0)\n\n        self.x += self.vx\n        self.y += self.vy\n\n        # 左右の壁\n        if self.x - self.radius <= 0:\n            self.x  = self.radius\n            self.vx = abs(self.vx)\n        if self.x + self.radius >= SCREEN_WIDTH:\n            self.x  = SCREEN_WIDTH - self.radius\n            self.vx = -abs(self.vx)\n        # 上の壁\n        if self.y - self.radius <= 0:\n            self.y  = self.radius\n            self.vy = abs(self.vy)\n        # 下に落下\n        if self.y - self.radius > SCREEN_HEIGHT:\n            self.alive = False\n\n    def draw(self, surface):\n        # 残像\n        for i, (tx, ty) in enumerate(self.trail):\n            alpha  = int(200 * (i + 1) / len(self.trail)) if self.trail else 0\n            radius = max(2, self.radius - (len(self.trail) - i))\n            trail_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)\n            pygame.draw.circle(trail_surf, (*CYAN[:3], alpha), (radius, radius), radius)\n            surface.blit(trail_surf, (tx - radius, ty - radius))\n        # 本体\n        pygame.draw.circle(surface, WHITE, (int(self.x), int(self.y)), self.radius)\n        pygame.draw.circle(surface, CYAN,  (int(self.x), int(self.y)), self.radius, 3)\n\n    @property\n    def rect(self):\n        return pygame.Rect(\n            int(self.x) - self.radius,\n            int(self.y) - self.radius,\n            self.radius * 2,\n            self.radius * 2\n        )\n\n    def reflect_paddle(self, paddle):\n        \"\"\"パドルの当たった位置によって反射角を変える\"\"\"\n        rel = (self.x - paddle.rect.centerx) / (paddle.rect.width / 2)\n        rel = max(-0.9, min(0.9, rel))\n        angle = math.radians(-150 + rel * 60)   # -150° ~ -90° ~ -30°\n        speed = math.hypot(self.vx, self.vy)\n        self.vx = speed * math.cos(angle)\n        self.vy = speed * math.sin(angle)\n        self.y  = paddle.rect.top - self.radius\n\n\n# ==================== パーティクルクラス ====================\nclass Particle:\n    def __init__(self, x, y, color):\n        angle  = random.uniform(0, math.pi * 2)\n        speed  = random.uniform(1.5, 5)\n        self.x  = float(x)\n        self.y  = float(y)\n        self.vx = speed * math.cos(angle)\n        self.vy = speed * math.sin(angle)\n        self.color  = color\n        self.life   = random.randint(20, 40)\n        self.radius = random.randint(2, 5)\n\n    def update(self):\n        self.x  += self.vx\n        self.y  += self.vy\n        self.vy += 0.15   # 重力
+\n        self.life -= 1\n\n    def draw(self, surface):\n        alpha = int(255 * self.life / 40)\n        r = max(1, self.radius)\n        s = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)\n        pygame.draw.circle(s, (*self.color[:3], alpha), (r, r), r)\n        surface.blit(s, (int(self.x) - r, int(self.y) - r))\n\n\n# ==================== ゲームクラス ====================\nclass BreakoutGame:\n    def __init__(self):\n        pygame.init()\n        pygame.display.set_caption(\"🎮  ブロック崩し  Breakout\")\n        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))\n        self.clock  = pygame.time.Clock()\n        self.font_large  = pygame.font.SysFont(\"yugothic,meiryo,sans-serif\", 56, bold=True)\n        self.font_medium = pygame.font.SysFont(\"yugothic,meiryo,sans-serif\", 32, bold=True)\n        self.font_small  = pygame.font.SysFont(\"yugothic,meiryo,sans-serif\", 22)\n        self.reset()\n\n    # ---------- 初期化 ----------\n    def reset(self):\n        self.score     = 0\n        self.lives     = 3\n        self.level     = 1\n        self.state     = \"start\"   # start / playing / paused / clear / gameover\n        self.paddle    = Paddle()\n        self.balls     = []\n        self.blocks    = []\n        self.particles = []\n        self._create_blocks()\n        self._launch_ball()\n\n    def _create_blocks(self):\n        self.blocks = []\n        for row in range(BLOCK_ROWS):\n            for col in range(BLOCK_COLS):\n                x = BLOCK_OFFSET_X + col * (BLOCK_WIDTH + BLOCK_PADDING)\n                y = BLOCK_OFFSET_Y + row * (BLOCK_HEIGHT + BLOCK_PADDING)\n                color = BLOCK_COLORS[row % len(BLOCK_COLORS)]\n                # レベル2以降は上2行が耐久度2\n                dur = 2 if (self.level >= 2 and row < 2) else 1\n                self.blocks.append(Block(x, y, color, dur))\n\n    def _launch_ball(self):\n        bx = self.paddle.rect.centerx\n        by = self.paddle.rect.top - BALL_RADIUS - 2\n        ball = Ball(bx, by)\n        # 速度をレベルに応じて上昇\n        speed = BALL_SPEED + (self.level - 1) * 0.6\n        angle = random.uniform(math.radians(220), math.radians(320))\n        ball.vx = speed * math.cos(angle)\n        ball.vy = speed *math.sin(angle)\n        self.balls = [ball]\n\n    # ---------- メインループ ----------\n    def run(self):\n        while True:\n            self.clock.tick(FPS)\n            self._handle_events()\n\n            if self.state == \"playing\":\n                self._update()\n\n            self._draw()\n\n    # ---------- イベント ----------\n    def _handle_events(self):\n        for event in pygame.event.get():\n            if event.type == pygame.QUIT:\n                pygame.quit()\n                sys.exit()\n\n            if event.type == pygame.KEYDOWN:\n                if event.key == pygame.K_ESCAPE:\n                    pygame.quit()\n                    sys.exit()\n\n                if self.state == \"start\":\n                    if event.key in (pygame.K_SPACE, pygame.K_RETURN):\n                        self.state = \"playing\"\n\n                elif self.state == \"playing\":\n                    if event.key == pygame.K_p:\n                        self.state = \"paused\"\n\n                elif self.state == \"paused\":\n                    if event.key == pygame.K_p:\n                        self.state = \"playing\"\n\n                elif self.state in (\"clear\", \"gameover\"):\n                    if event.key in (pygame.K_SPACE, pygame.K_RETURN):\n                        self.reset()\n\n    # ---------- 更新 ----------\n    def _update(self):\n        keys = pygame.key.get_pressed()\n        self.paddle.update(keys)\n\n        for ball in self.balls[:]:\n            ball.update()\n\n            # パドルとの衝突\n            if ball.rect.colliderect(self.paddle.rect) and ball.vy > 0:\n                ball.reflect_paddle(self.paddle)\n\n            # ブロックとの衝突\n            for block in self.blocks:\n                if not block.alive:\n                    continue\n                if ball.rect.colliderect(block.rect):\n                    self._resolve_ball_block(ball, block)\n                    destroyed = block.hit()\n                    if destroyed:\n                        self.score += 10 * self.level\n                        # パーティクル生成\n                        for _ in range(18):\n                            self.particles.append(\n                                Particle(block.rect.centerx, block.rect.centery, block.color)\n                            )\n                    break   # 1フレームに1ブロックまで\n\n            if not ball.alive:\n                self.balls.remove(ball)\n\n        # ボール消滅\n        if not self.balls:\n            self.lives -= 1\n            if self.lives <= 0:\n                self.state = \"gameover\"\n            else:\n                self._launch_ball()\n                self.state = \"playing\"\n\n        # パーティクル更新\n        self.particles = [p for p in self.particles if p.life > 0]\n        for p in self.particles:\n            p.update()\n\n        # 全ブロック破壊 → クリア\n        if all(not b.alive for b in self.blocks):\n            self.level += 1\n            self._create_blocks()\n            self._launch_ball()\n            self.state = \"clear\"\n\n    def _resolve_ball_block(self, ball, block):\n        \"\"\"どの面で当たったか判定して反射\"\"\"\n        br = ball.rect\n        bl = block.rect\n\n        overlap_left   = br.right  - bl.left\n        overlap_right  = bl.right  - br.left\n        overlap_top    = br.bottom -bl.top\n        overlap_bottom = bl.bottom - br.top\n\n        min_overlap = min(overlap_left, overlap_right, overlap_top, overlap_bottom)\n\n        if min_overlap == overlap_top and ball.vy > 0:\n            ball.vy = -abs(ball.vy)\n            ball.y  = bl.top - ball.radius\n        elif min_overlap == overlap_bottom and ball.vy < 0:\n            ball.vy = abs(ball.vy)\n            ball.y  = bl.bottom + ball.radius\n        elif min_overlap == overlap_left and ball.vx > 0:\n            ball.vx = -abs(ball.vx)\n            ball.x  = bl.left - ball.radius\n        elif min_overlap == overlap_right and ball.vx < 0:\n            ball.vx = abs(ball.vx)\n            ball.x  = bl.right + ball.radius\n\n    # ---------- 描画 ----------\n    def _draw(self):\n        self.screen.fill(DARK_GRAY)\n        self._draw_grid()\n\n        for block in self.blocks:\n            block.draw(self.screen)\n\n        for p in self.particles:\n            p.draw(self.screen)\n\n        self.paddle.draw(self.screen)\n\n        for ball in self.balls:\n            ball.draw(self.screen)\n\n        self._draw_hud()\n\n        if self.state == \"start\":\n            self._draw_overlay(\"ブロック崩し\", \"SPACE / ENTER でスタート\")\n        elif self.state == \"paused\":\n            self._draw_overlay(\"⏸  ポーズ中\", \"P キーで再開\")\n        elif self.state == \"clear\":\n            self._draw_overlay(f\"🎉 LEVEL {self.level - 1} クリア！\",\n                               \"SPACE / ENTER で次のレベルへ\")\n        elif self.state == \"gameover\":\n            self._draw_overlay(\"💀 GAME OVER\",\n                               f\"スコア: {self.score}  |  SPACE / ENTER でリトライ\")\n\n        pygame.display.flip()\n\n    def _draw_grid(self):\n        \"\"\"背景グリッド（装飾）\"\"\"\n        for x in range(0, SCREEN_WIDTH, 40):\n            pygame.draw.line(self.screen, GRAY, (x, 0), (x, SCREEN_HEIGHT))\n        for y in range(0, SCREEN_HEIGHT, 40):\n            pygame.draw.line(self.screen, GRAY, (0, y), (SCREEN_WIDTH, y))\n\n    def _draw_hud(self):\n        # スコア\n        score_surf = self.font_small.render(f\"SCORE  {self.score:>6}\", True, WHITE)\n        self.screen.blit(score_surf, (16, 12))\n        # レベル\n        level_surf = self.font_small.render(f\"LEVEL  {self.level}\", True, YELLOW)\n        self.screen.blit(level_surf, (SCREEN_WIDTH // 2 - level_surf.get_width() // 2, 12))\n        # ライフ（ハート）\n        for i in range(self.lives):\n            heart_surf = self.font_small.render(\"♥\", True, RED)\n            self.screen.blit(heart_surf, (SCREEN_WIDTH - 30 - i * 28, 12))\n\n    def _draw_overlay(self, title, subtitle):\n        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)\n        overlay.fill((0, 0, 0, 170))\n        self.screen.blit(overlay, (0, 0))\n\n        title_surf = self.font_large.render(title, True, CYAN)\n        sub_surf   = self.font_medium.render(subtitle, True, WHITE)\n\n        self.screen.blit(title_surf,\n                         (SCREEN_WIDTH // 2 - title_surf.get_width() // 2,\n                          SCREEN_HEIGHT // 2 - 60))\n        self.screen.blit(sub_surf,\n                         (SCREEN_WIDTH // 2 - sub_surf.get_width() // 2,\n                          SCREEN_HEIGHT // 2 + 20))\n\n        # 操作説明（スタート画面のみ）\n        if self.state == \"start\":\n            hints = [\n                \"← → / A D : パドル移動\",\n                \"P : ポーズ\",\n                \"ESC : 終了\",\n            ]\n            for i, hint in enumerate(hints):\n                h_surf = self.font_small.render(hint, True, GRAY)\n                self.screen.blit(h_surf,\n                                 (SCREEN_WIDTH // 2 - h_surf.get_width() // 2,\n                                  SCREEN_HEIGHT // 2 + 90 + i * 30))\n\n\n# ==================== エントリポイント ====================\nif __name__ == \"__main__\":\n    game = BreakoutGame()\n    game.run()\n","path":"/home/swkima/Develop/playground/breakout.py"})
+│  No
+│
+▲  Tool call denied
+│
+◇  Done
+│
+●  Assistant
+│  ユーザーがツール使用を拒否したようですので、代わりにコードをここに直接お見せします。以下のコードをコピーして `breakout.py` として保存してください。
+│
+│  ---
+│
+│  ## `breakout.py`
+│
+│  ```python
+│  import pygame
+│  import sys
+│  import random
+│  import math
+│
+│  # ==================== 定数 ====================
+│  SCREEN_WIDTH  = 800
+│  SCREEN_HEIGHT = 600
+│  FPS           = 60
+│
+│  # 色定義
+│  BLACK      = (0,   0,   0)
+│  WHITE      = (255, 255, 255)
+│  GRAY       = (50,  50,  50)
+│  DARK_GRAY  = (30,  30,  30)
+│  CYAN       = (0,   230, 230)
+│  ORANGE     = (255, 140, 0)
+│  YELLOW     = (255, 220, 0)
+│  GREEN      = (50,  200, 80)
+│  RED        = (220, 60,  60)
+│  PURPLE     = (160, 60,  220)
+│  BLUE       = (60,  120, 220)
+│  PINK       = (255, 100, 180)
+│
+│  BLOCK_COLORS = [RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, PINK]
+│
+│  # ブロック設定
+│  BLOCK_COLS    = 10
+│  BLOCK_ROWS    = 6
+│  BLOCK_WIDTH   = 68
+│  BLOCK_HEIGHT  = 24
+│  BLOCK_PADDING = 6
+│  BLOCK_OFFSET_X = (SCREEN_WIDTH - (BLOCK_COLS * (BLOCK_WIDTH + BLOCK_PADDING) - BLOCK_PADDING)) // 2
+│  BLOCK_OFFSET_Y = 60
+│
+│  # パドル設定
+│  PADDLE_WIDTH  = 100
+│  PADDLE_HEIGHT = 14
+│  PADDLE_Y      = SCREEN_HEIGHT - 60
+│  PADDLE_SPEED  = 7
+│
+│  # ボール設定
+│  BALL_RADIUS   = 9
+│  BALL_SPEED    = 5.5
+│
+│  # ==================== ブロッククラス ====================
+│  class Block:
+│      def __init__(self, x, y, color, durability=1):
+│          self.rect       = pygame.Rect(x, y, BLOCK_WIDTH, BLOCK_HEIGHT)
+│          self.color      = color
+│          self.durability = durability   # 1 or 2
+│          self.alive      = True
+│          self.hit_flash  = 0
+│
+│      def draw(self, surface):
+│          if not self.alive:
+│              return
+│          draw_color = WHITE if self.hit_flash > 0 else self.color
+│          pygame.draw.rect(surface, draw_color, self.rect, border_radius=5)
+│          highlight = tuple(min(c + 80, 255) for c in draw_color)
+│          pygame.draw.line(surface, highlight,
+│                           (self.rect.left + 4, self.rect.top + 3),
+│                           (self.rect.right - 4, self.rect.top + 3), 2)
+│          border_color = WHITE if self.durability == 2 else DARK_GRAY
+│          pygame.draw.rect(surface, border_color, self.rect, 2, border_radius=5)
+│          if self.hit_flash > 0:
+│              self.hit_flash -= 1
+│
+│      def hit(self):
+│          self.durability -= 1
+│          self.hit_flash = 4
+│          if self.durability <= 0:
+│              self.alive = False
+│              return True
+│          return False
+│
+│
+│  # ==================== パドルクラス ====================
+│  class Paddle:
+│      def __init__(self):
+│          self.rect = pygame.Rect(
+│              (SCREEN_WIDTH - PADDLE_WIDTH) // 2,
+│              PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT
+│          )
+│
+│      def update(self, keys):
+│          if keys[pygame.K_LEFT]  or keys[pygame.K_a]:
+│              self.rect.x -= PADDLE_SPEED
+│          if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+│              self.rect.x += PADDLE_SPEED
+│          self.rect.clamp_ip(pygame.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
+│
+│      def draw(self, surface):
+│          pygame.draw.rect(surface, CYAN, self.rect, border_radius=7)
+│          pygame.draw.line(surface, (180, 255, 255),
+│                           (self.rect.left + 6, self.rect.top + 3),
+│                           (self.rect.right - 6, self.rect.top + 3), 2)
+│
+│
+│  # ==================== ボールクラス ====================
+│  class Ball:
+│      def __init__(self, x, y):
+│          self.x  = float(x)
+│          self.y  = float(y)
+│          angle   = random.uniform(math.radians(220), math.radians(320))
+│          self.vx = BALL_SPEED * math.cos(angle)
+│          self.vy = BALL_SPEED * math.sin(angle)
+│          self.radius = BALL_RADIUS
+│          self.alive  = True
+│          self.trail  = []
+│
+│      def update(self):
+│          self.trail.append((int(self.x), int(self.y)))
+│          if len(self.trail) > 8:
+│              self.trail.pop(0)
+│          self.x += self.vx
+│          self.y += self.vy
+│          if self.x - self.radius <= 0:
+│              self.x  = self.radius;  self.vx = abs(self.vx)
+│          if self.x + self.radius >= SCREEN_WIDTH:
+│              self.x  = SCREEN_WIDTH - self.radius;  self.vx = -abs(self.vx)
+│          if self.y - self.radius <= 0:
+│              self.y  = self.radius;  self.vy = abs(self.vy)
+│          if self.y - self.radius > SCREEN_HEIGHT:
+│              self.alive = False
+│
+│      def draw(self, surface):
+│          for i, (tx, ty) in enumerate(self.trail):
+│              alpha  = int(200 * (i + 1) / len(self.trail)) if self.trail else 0
+│              radius = max(2, self.radius - (len(self.trail) - i))
+│              s = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+│              pygame.draw.circle(s, (*CYAN[:3], alpha), (radius, radius), radius)
+│              surface.blit(s, (tx - radius, ty - radius))
+│          pygame.draw.circle(surface, WHITE, (int(self.x), int(self.y)), self.radius)
+│          pygame.draw.circle(surface, CYAN,  (int(self.x), int(self.y)), self.radius, 3)
+│
+│      @property
+│      def rect(self):
+│          return pygame.Rect(int(self.x)-self.radius, int(self.y)-self.radius,
+│                             self.radius*2, self.radius*2)
+│
+│      def reflect_paddle(self, paddle):
+│          rel = (self.x - paddle.rect.centerx) / (paddle.rect.width / 2)
+│          rel = max(-0.9, min(0.9, rel))
+│          angle = math.radians(-150 + rel * 60)
+│          speed = math.hypot(self.vx, self.vy)
+│          self.vx = speed * math.cos(angle)
+│          self.vy = speed * math.sin(angle)
+│          self.y  = paddle.rect.top - self.radius
+│
+│
+│  # ==================== パーティクルクラス ====================
+│  class Particle:
+│      def __init__(self, x, y, color):
+│          angle = random.uniform(0, math.pi * 2)
+│          speed = random.uniform(1.5, 5)
+│          self.x, self.y = float(x), float(y)
+│          self.vx = speed * math.cos(angle)
+│          self.vy = speed * math.sin(angle)
+│          self.color  = color
+│          self.life   = random.randint(20, 40)
+│          self.radius = random.randint(2, 5)
+│
+│      def update(self):
+│          self.x += self.vx;  self.y += self.vy
+│          self.vy += 0.15;    self.life -= 1
+│
+│      def draw(self, surface):
+│          alpha = int(255 * self.life / 40)
+│          r = max(1, self.radius)
+│          s = pygame.Surface((r*2, r*2), pygame.SRCALPHA)
+│          pygame.draw.circle(s, (*self.color[:3], alpha), (r, r), r)
+│          surface.blit(s, (int(self.x)-r, int(self.y)-r))
+│
+│
+│  # ==================== ゲームクラス ====================
+│  class BreakoutGame:
+│      def __init__(self):
+│          pygame.init()
+│          pygame.display.set_caption("ブロック崩し  Breakout")
+│          self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+│          self.clock  = pygame.time.Clock()
+│          self.font_large  = pygame.font.SysFont("yugothic,meiryo,sans-serif", 56, bold=True)
+│          self.font_medium = pygame.font.SysFont("yugothic,meiryo,sans-serif", 32, bold=True)
+│          self.font_small  = pygame.font.SysFont("yugothic,meiryo,sans-serif", 22)
+│          self.reset()
+│
+│      def reset(self):
+│          self.score = 0;  self.lives = 3;  self.level = 1
+│          self.state = "start"
+│          self.paddle = Paddle();  self.balls = [];  self.blocks = [];  self.particles = []
+│          self._create_blocks();   self._launch_ball()
+│
+│      def _create_blocks(self):
+│          self.blocks = []
+│          for row in range(BLOCK_ROWS):
+│              for col in range(BLOCK_COLS):
+│                  x = BLOCK_OFFSET_X + col * (BLOCK_WIDTH + BLOCK_PADDING)
+│                  y = BLOCK_OFFSET_Y + row * (BLOCK_HEIGHT + BLOCK_PADDING)
+│                  color = BLOCK_COLORS[row % len(BLOCK_COLORS)]
+│                  dur = 2 if (self.level >= 2 and row < 2) else 1
+│                  self.blocks.append(Block(x, y, color, dur))
+│
+│      def _launch_ball(self):
+│          bx, by = self.paddle.rect.centerx, self.paddle.rect.top - BALL_RADIUS - 2
+│          ball  = Ball(bx, by)
+│          speed = BALL_SPEED + (self.level - 1) * 0.6
+│          angle = random.uniform(math.radians(220), math.radians(320))
+│          ball.vx = speed * math.cos(angle);  ball.vy = speed * math.sin(angle)
+│          self.balls = [ball]
+│
+│      def run(self):
+│          while True:
+│              self.clock.tick(FPS)
+│              self._handle_events()
+│              if self.state == "playing":
+│                  self._update()
+│              self._draw()
+│
+│      def _handle_events(self):
+│          for event in pygame.event.get():
+│              if event.type == pygame.QUIT:
+│                  pygame.quit(); sys.exit()
+│              if event.type == pygame.KEYDOWN:
+│                  if event.key == pygame.K_ESCAPE:
+│                      pygame.quit(); sys.exit()
+│                  if self.state == "start" and event.key in (pygame.K_SPACE, pygame.K_RETURN):
+│                      self.state = "playing"
+│                  elif self.state == "playing" and event.key == pygame.K_p:
+│                      self.state = "paused"
+│                  elif self.state == "paused" and event.key == pygame.K_p:
+│                      self.state = "playing"
+│                  elif self.state in ("clear", "gameover") and event.key in (pygame.K_SPACE, pygame.K_RETURN):
+│                      self.reset()
+│
+│      def _update(self):
+│          keys = pygame.key.get_pressed()
+│          self.paddle.update(keys)
+│          for ball in self.balls[:]:
+│              ball.update()
+│              if ball.rect.colliderect(self.paddle.rect) and ball.vy > 0:
+│                  ball.reflect_paddle(self.paddle)
+│              for block in self.blocks:
+│                  if not block.alive: continue
+│                  if ball.rect.colliderect(block.rect):
+│                      self._resolve_ball_block(ball, block)
+│                      if block.hit():
+│                          self.score += 10 * self.level
+│                          for _ in range(18):
+│                              self.particles.append(Particle(block.rect.centerx, block.rect.centery, block.color))
+│                      break
+│              if not ball.alive:
+│                  self.balls.remove(ball)
+│          if not self.balls:
+│              self.lives -= 1
+│              if self.lives <= 0:
+│                  self.state = "gameover"
+│              else:
+│                  self._launch_ball()
+│          self.particles = [p for p in self.particles if p.life > 0]
+│          for p in self.particles: p.update()
+│          if all(not b.alive for b in self.blocks):
+│              self.level += 1
+│              self._create_blocks(); self._launch_ball()
+│              self.state = "clear"
+│
+│      def _resolve_ball_block(self, ball, block):
+│          br, bl = ball.rect, block.rect
+│          overlaps = [br.right - bl.left, bl.right - br.left,
+│                      br.bottom - bl.top, bl.bottom - br.top]
+│          m = min(overlaps)
+│          if m == overlaps[2] and ball.vy > 0:
+│              ball.vy = -abs(ball.vy); ball.y = bl.top - ball.radius
+│          elif m == overlaps[3] and ball.vy < 0:
+│              ball.vy = abs(ball.vy);  ball.y = bl.bottom + ball.radius
+│          elif m == overlaps[0] and ball.vx > 0:
+│              ball.vx = -abs(ball.vx); ball.x = bl.left - ball.radius
+│          elif m == overlaps[1] and ball.vx < 0:
+│              ball.vx = abs(ball.vx);  ball.x = bl.right + ball.radius
+│
+│      def _draw(self):
+│          self.screen.fill(DARK_GRAY)
+│          for x in range(0, SCREEN_WIDTH, 40):
+│              pygame.draw.line(self.screen, GRAY, (x, 0), (x, SCREEN_HEIGHT))
+│          for y in range(0, SCREEN_HEIGHT, 40):
+│              pygame.draw.line(self.screen, GRAY, (0, y), (SCREEN_WIDTH, y))
+│          for block in self.blocks: block.draw(self.screen)
+│          for p in self.particles:  p.draw(self.screen)
+│          self.paddle.draw(self.screen)
+│          for ball in self.balls:   ball.draw(self.screen)
+│          self._draw_hud()
+│          if   self.state == "start":    self._draw_overlay("ブロック崩し", "SPACE / ENTER でスタート")
+│          elif self.state == "paused":   self._draw_overlay("ポーズ中", "P キーで再開")
+│          elif self.state == "clear":    self._draw_overlay(f"LEVEL {self.level-1} クリア！", "SPACE / ENTER で次のレベルへ")
+│          elif self.state == "gameover": self._draw_overlay("GAME OVER", f"スコア: {self.score}  |  SPACE / ENTER でリトライ")
+│          pygame.display.flip()
+│
+│      def _draw_hud(self):
+│          self.screen.blit(self.font_small.render(f"SCORE  {self.score:>6}", True, WHITE), (16, 12))
+│          lv = self.font_small.render(f"LEVEL  {self.level}", True, YELLOW)
+│          self.screen.blit(lv, (SCREEN_WIDTH//2 - lv.get_width()//2, 12))
+│          for i in range(self.lives):
+│              h = self.font_small.render("♥", True, RED)
+│              self.screen.blit(h, (SCREEN_WIDTH - 30 - i*28, 12))
+│
+│      def _draw_overlay(self, title, subtitle):
+│          ov = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+│          ov.fill((0, 0, 0, 170));  self.screen.blit(ov, (0, 0))
+│          ts = self.font_large.render(title, True, CYAN)
+│          ss = self.font_medium.render(subtitle, True, WHITE)
+│          self.screen.blit(ts, (SCREEN_WIDTH//2 - ts.get_width()//2, SCREEN_HEIGHT//2 - 60))
+│          self.screen.blit(ss, (SCREEN_WIDTH//2 - ss.get_width()//2, SCREEN_HEIGHT//2 + 20))
+│          if self.state == "start":
+│              for i, hint in enumerate(["← → / A D : パドル移動", "P : ポーズ", "ESC : 終了"]):
+│                  hs = self.font_small.render(hint, True, GRAY)
+│                  self.screen.blit(hs, (SCREEN_WIDTH//2 - hs.get_width()//2, SCREEN_HEIGHT//2 + 90 + i*30))
+│
+│  if __name__ == "__main__":
+│      game = BreakoutGame()
+│      game.run()
+│  ```
+│
+│  ---
+│
+│  ## 実行方法
+│
+│  ```bash
+│  # pygameがなければインストール
+│  pip install pygame
+│
+│  # 実行
+│  python breakout.py
+│  ```
+│
+│  ---
+│
+│  ## ゲームの機能・仕様
+│
+│  | 項目 | 内容 |
+│  |------|------|
+│  | **操作** | `←` `→` または `A` `D` でパドル移動 |
+│  | **ポーズ** | `P` キーで一時停止・再開 |
+│  | **終了** | `ESC` |
+│  | **スコア** | ブロック破壊で `10 × レベル` 点 |
+│  | **ライフ** | 3回ミスでゲームオーバー（♥表示） |
+│  | **レベル** | 全ブロック破壊で次のレベルへ、レベルごとにボールが加速 |
+│  | **耐久ブロック** | レベル2以降は上2列が2回当てないと壊れない（白縁） |
+│  | **演出** | ボールの残像トレイル、ブロック破壊時のパーティクル爆発、ヒット時の白フラッシュ |
+│  | **反射** | パドルの当たった位置で反射角を変化（端に当てると急角度） |
+│
+├  Token Usage: 17996 / 700000
+│
+◇  User:
+│  pipではなくuvを使ってください
+│
+◇  Done
+│
+●  Assistant
+│  `uv`を使ってpygameをインストールし、ゲームを作成します！
+│
+├  Token Usage: 18119 / 700000
+│
+◇  Allow tool call: bash({"command":"cd /home/swkima/Develop/playground && uv init --no-readme 2>/dev/null || true && uv add pygame"})
+│  Yes
+│
+◇  bash completed
+│
+◇  Done
+│
+●  Assistant
+│  pygameのインストールが完了しました。次にゲームファイルを作成します。
+│
+├  Token Usage: 23300 / 700000
+│
+◆  Allow tool call: write({"content":"import pygame\nimport sys\nimport random\nimport math\n\n# ==================== 定数 ====================\nSCREEN_WIDTH  = 800\nSCREEN_HEIGHT = 600\nFPS           = 60\n\n# 色定義\nBLACK      = (0,   0,   0)\nWHITE      = (255, 255, 255)\nGRAY       = (50,  50,  50)\nDARK_GRAY  = (30,  30,  30)\nCYAN       = (0,   230, 230)\nORANGE     = (255, 140, 0)\nYELLOW     = (255, 220, 0)\nGREEN      = (50,  200, 80)\nRED        = (220, 60,  60)\nPURPLE     = (160, 60,  220)\nBLUE       = (60,  120, 220)\nPINK       = (255, 100, 180)\n\nBLOCK_COLORS = [RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, PINK]\n\n# ブロック設定\nBLOCK_COLS     = 10\nBLOCK_ROWS     = 6\nBLOCK_WIDTH    = 68\nBLOCK_HEIGHT   = 24\nBLOCK_PADDING  = 6\nBLOCK_OFFSET_X = (SCREEN_WIDTH - (BLOCK_COLS * (BLOCK_WIDTH + BLOCK_PADDING) - BLOCK_PADDING)) // 2\nBLOCK_OFFSET_Y = 60\n\n# パドル設定\nPADDLE_WIDTH  = 100\nPADDLE_HEIGHT = 14\nPADDLE_Y      = SCREEN_HEIGHT - 60\nPADDLE_SPEED  = 7\n\n# ボール設定\nBALL_RADIUS = 9\nBALL_SPEED  = 5.5\n\n\n# ==================== ブロッククラス ====================\nclass Block:\n   def __init__(self, x, y, color, durability=1):\n        self.rect       = pygame.Rect(x, y, BLOCK_WIDTH, BLOCK_HEIGHT)\n        self.color      = color\n        self.durability = durability  # 1 or 2\n        self.alive      = True\n        self.hit_flash  = 0           # ヒット時の白フラッシュ用タイマー\n\n    def draw(self, surface):\n        if not self.alive:\n            return\n        draw_color = WHITE if self.hit_flash > 0 else self.color\n        # 本体\n        pygame.draw.rect(surface, draw_color, self.rect, border_radius=5)\n        # ハイライト（上辺）\n        highlight = tuple(min(c + 80, 255) for c in draw_color)\n        pygame.draw.line(surface, highlight,\n                         (self.rect.left + 4, self.rect.top + 3),\n                         (self.rect.right - 4, self.rect.top + 3), 2)\n        # 耐久度2のブロックは白縁取り、それ以外は暗色\n        border_color = WHITE if self.durability == 2 else DARK_GRAY\n        pygame.draw.rect(surface, border_color, self.rect, 2, border_radius=5)\n        if self.hit_flash > 0:\n            self.hit_flash -= 1\n\n    def hit(self):\n        self.durability -= 1\n        self.hit_flash = 4\n        if self.durability <= 0:\n            self.alive = False\n            return True   # 破壊\n        return False\n\n\n# ==================== パドルクラス ====================\nclass Paddle:\n    def __init__(self):\n        self.rect = pygame.Rect(\n            (SCREEN_WIDTH - PADDLE_WIDTH) // 2,\n            PADDLE_Y,\n            PADDLE_WIDTH,\n            PADDLE_HEIGHT,\n        )\n\n    def update(self, keys):\n        if keys[pygame.K_LEFT] or keys[pygame.K_a]:\n            self.rect.x -= PADDLE_SPEED\n        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:\n            self.rect.x += PADDLE_SPEED\n        self.rect.clamp_ip(pygame.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))\n\n    def draw(self, surface):\n        pygame.draw.rect(surface, CYAN, self.rect, border_radius=7)\n        pygame.draw.line(surface, (180, 255, 255),\n                         (self.rect.left + 6, self.rect.top + 3),\n                         (self.rect.right - 6, self.rect.top + 3), 2)\n\n\n# ==================== ボールクラス ====================\nclass Ball:\n    def __init__(self, x, y, speed=BALL_SPEED):\n        self.x      = float(x)\n        self.y      = float(y)\n        angle       = random.uniform(math.radians(220), math.radians(320))\n        self.vx     = speed * math.cos(angle)\n        self.vy     = speed * math.sin(angle)\n        self.radius = BALL_RADIUS\n        self.alive  = True\n        self.trail  = []  # 残像リスト\n\n    def update(self):\n        self.trail.append((int(self.x), int(self.y)))\n        if len(self.trail) > 8:\n            self.trail.pop(0)\n\n        self.x += self.vx\n        self.y += self.vy\n\n        # 左右の壁\n        if self.x - self.radius <= 0:\n            self.x  = self.radius\n            self.vx = abs(self.vx)\n        if self.x + self.radius >= SCREEN_WIDTH:\n            self.x  = SCREEN_WIDTH - self.radius\n            self.vx = -abs(self.vx)\n        # 上の壁\n        if self.y - self.radius <= 0:\n            self.y  = self.radius\n            self.vy = abs(self.vy)\n        # 下に落下\n        if self.y - self.radius > SCREEN_HEIGHT:\n            self.alive = False\n\n    def draw(self, surface):\n        # 残像\n        for i, (tx, ty) in enumerate(self.trail):\n            alpha  = int(200 * (i + 1) / len(self.trail)) if self.trail else 0\n            radius = max(2, self.radius - (len(self.trail) - i))\n            s = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)\n            pygame.draw.circle(s, (*CYAN[:3], alpha), (radius, radius), radius)\n            surface.blit(s, (tx - radius, ty - radius))\n        # 本体\n        pygame.draw.circle(surface, WHITE, (int(self.x), int(self.y)), self.radius)\n        pygame.draw.circle(surface, CYAN,  (int(self.x), int(self.y)), self.radius, 3)\n\n    @property\n    def rect(self):\n        return pygame.Rect(\n            int(self.x) - self.radius,\n            int(self.y) - self.radius,\n            self.radius * 2,\n            self.radius * 2,\n        )\n\n    def reflect_paddle(self, paddle):\n        \"\"\"パドルの当たった位置によって反射角を変える\"\"\"\n        rel   = (self.x - paddle.rect.centerx) / (paddle.rect.width / 2)\n        rel   = max(-0.9, min(0.9, rel))\n        angle = math.radians(-150 + rel * 60)  # 左端:-150°  中央:-90°  右端:-30°\n        speed = math.hypot(self.vx, self.vy)\n        self.vx = speed * math.cos(angle)\n        self.vy = speed * math.sin(angle)\n        self.y  = paddle.rect.top - self.radius\n\n\n# ==================== パーテ◇  Allow tool call: write({"content":"import pygame\nimport sys\nimport random\nimport math\n\n# ==================== 定数 ====================\nSCREEN_WIDTH  = 800\nSCREEN_HEIGHT = 600\nFPS           = 60\n\n# 色定義\nBLACK      = (0,   0,   0)\nWHITE      = (255, 255, 255)\nGRAY       = (50,  50,  50)\nDARK_GRAY  = (30,  30,  30)\nCYAN       = (0,   230, 230)\nORANGE     = (255, 140, 0)\nYELLOW     = (255, 220, 0)\nGREEN      = (50,  200, 80)\nRED        = (220, 60,  60)\nPURPLE     = (160, 60,  220)\nBLUE       = (60,  120, 220)\nPINK       = (255, 100, 180)\n\nBLOCK_COLORS = [RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, PINK]\n\n# ブロック設定\nBLOCK_COLS     = 10\nBLOCK_ROWS     = 6\nBLOCK_WIDTH    = 68\nBLOCK_HEIGHT   = 24\nBLOCK_PADDING  = 6\nBLOCK_OFFSET_X = (SCREEN_WIDTH - (BLOCK_COLS * (BLOCK_WIDTH + BLOCK_PADDING) - BLOCK_PADDING)) // 2\nBLOCK_OFFSET_Y = 60\n\n# パドル設定\nPADDLE_WIDTH  = 100\nPADDLE_HEIGHT = 14\nPADDLE_Y      = SCREEN_HEIGHT - 60\nPADDLE_SPEED  = 7\n\n# ボール設定\nBALL_RADIUS = 9\nBALL_SPEED  = 5.5\n\n\n# ==================== ブロッククラス ====================\nclass Block:\n    def __init__(self, x, y, color, durability=1):\n        self.rect       = pygame.Rect(x, y, BLOCK_WIDTH, BLOCK_HEIGHT)\n        self.color      = color\n        self.durability = durability  # 1 or 2\n        self.alive      = True\n        self.hit_flash  = 0           # ヒット時の白フラッシュ用タイマー\n\n    def draw(self, surface):\n        if not self.alive:\n            return\n        draw_color = WHITE if self.hit_flash > 0 else self.color\n        # 本体\n        pygame.draw.rect(surface, draw_color, self.rect, border_radius=5)\n        # ハイライ
+ト（上辺）\n        highlight = tuple(min(c + 80, 255) for c in draw_color)\n        pygame.draw.line(surface, highlight,\n                         (self.rect.left + 4, self.rect.top + 3),\n                         (self.rect.right - 4, self.rect.top + 3), 2)\n        # 耐久度2のブロックは白縁取り、それ以外は暗色\n        border_color = WHITE if self.durability == 2 else DARK_GRAY\n        pygame.draw.rect(surface, border_color, self.rect, 2, border_radius=5)\n        if self.hit_flash > 0:\n            self.hit_flash -= 1\n\n    def hit(self):\n        self.durability -= 1\n        self.hit_flash = 4\n        if self.durability <= 0:\n            self.alive = False\n            return True   # 破壊\n        return False\n\n\n# ==================== パドルクラス ====================\nclass Paddle:\n    def __init__(self):\n        self.rect = pygame.Rect(\n            (SCREEN_WIDTH - PADDLE_WIDTH) // 2,\n            PADDLE_Y,\n            PADDLE_WIDTH,\n            PADDLE_HEIGHT,\n        )\n\n    def update(self, keys):\n        if keys[pygame.K_LEFT] or keys[pygame.K_a]:\n            self.rect.x -= PADDLE_SPEED\n        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:\n            self.rect.x += PADDLE_SPEED\n        self.rect.clamp_ip(pygame.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))\n\n    def draw(self, surface):\n        pygame.draw.rect(surface, CYAN, self.rect, border_radius=7)\n        pygame.draw.line(surface, (180, 255, 255),\n                         (self.rect.left + 6, self.rect.top + 3),\n                         (self.rect.right - 6, self.rect.top + 3), 2)\n\n\n# ==================== ボールクラス ====================\nclass Ball:\n    def __init__(self, x, y, speed=BALL_SPEED):\n        self.x      = float(x)\n        self.y      = float(y)\n        angle       = random.uniform(math.radians(220), math.radians(320))\n        self.vx     = speed * math.cos(angle)\n        self.vy     = speed * math.sin(angle)\n        self.radius = BALL_RADIUS\n        self.alive  = True\n        self.trail  = []  # 残像リスト\n\n    def update(self):\n        self.trail.append((int(self.x), int(self.y)))\n        if len(self.trail) > 8:\n            self.trail.pop(0)\n\n        self.x += self.vx\n        self.y += self.vy\n\n        # 左右の壁\n        if self.x - self.radius <= 0:\n            self.x  = self.radius\n            self.vx = abs(self.vx)\n        if self.x + self.radius >= SCREEN_WIDTH:\n            self.x  = SCREEN_WIDTH - self.radius\n            self.vx = -abs(self.vx)\n        # 上の壁\n        if self.y - self.radius <= 0:\n            self.y  = self.radius\n            self.vy = abs(self.vy)\n        # 下に落下\n        if self.y - self.radius > SCREEN_HEIGHT:\n            self.alive = False\n\n    def draw(self, surface):\n        # 残像\n        for i, (tx, ty) in enumerate(self.trail):\n            alpha  = int(200 * (i + 1) / len(self.trail)) if self.trail else 0\n            radius = max(2, self.radius - (len(self.trail) - i))\n            s = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)\n            pygame.draw.circle(s, (*CYAN[:3], alpha), (radius, radius), radius)\n            surface.blit(s, (tx - radius, ty - radius))\n        # 本体\n        pygame.draw.circle(surface, WHITE, (int(self.x), int(self.y)), self.radius)\n        pygame.draw.circle(surface, CYAN,  (int(self.x), int(self.y)), self.radius, 3)\n\n    @property\n    def rect(self):\n        return pygame.Rect(\n            int(self.x) - self.radius,\n            int(self.y) - self.radius,\n            self.radius * 2,\n            self.radius * 2,\n        )\n\n    def reflect_paddle(self, paddle):\n        \"\"\"パドルの当たった位置によって反射角を変える\"\"\"\n        rel   = (self.x - paddle.rect.centerx) / (paddle.rect.width / 2)\n        rel   = max(-0.9, min(0.9, rel))\n        angle = math.radians(-150 + rel * 60)  # 左端:-150°  中央:-90°  右端:-30°\n        speed = math.hypot(self.vx, self.vy)\n        self.vx = speed * math.cos(angle)\n        self.vy = speed * math.sin(angle)\n        self.y  = paddle.rect.top - self.radius\n\n\n# ==================== パーテ
+ィクルクラス ====================\nclass Particle:\n    def __init__(self, x, y, color):\n        angle      = random.uniform(0, math.pi * 2)\n        speed      = random.uniform(1.5, 5)\n        self.x     = float(x)\n        self.y     = float(y)\n        self.vx    = speed * math.cos(angle)\n        self.vy    = speed * math.sin(angle)\n        self.color  = color\n        self.life   = random.randint(20, 40)\n        self.radius = random.randint(2, 5)\n\n    def update(self):\n        self.x  += self.vx\n        self.y  += self.vy\n        self.vy += 0.15  # 重力\n        self.life -= 1\n\n    def draw(self, surface):\n        alpha = int(255 * self.life / 40)\n        r = max(1, self.radius)\n        s = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)\n        pygame.draw.circle(s, (*self.color[:3], alpha), (r, r), r)\n        surface.blit(s, (int(self.x) - r, int(self.y) - r))\n\n\n# ==================== ゲームクラス ====================\nclass BreakoutGame:\n    def __init__(self):\n        pygame.init()\n        pygame.display.set_caption(\"ブロック崩し  Breakout\")\n        self.screen      = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))\n        self.clock       = pygame.time.Clock()\n        self.font_large  = pygame.font.SysFont(\"yugothic,meiryo,sans-serif\", 56, bold=True)\n        self.font_medium = pygame.font.SysFont(\"yugothic,meiryo,sans-serif\", 32, bold=True)\n        self.font_small  = pygame.font.SysFont(\"yugothic,meiryo,sans-serif\", 22)\n        self.reset()\n\n    # ---------- 初期化 ----------\n    def reset(self):\n        self.score     = 0\n        self.lives     = 3\n        self.level     = 1\n        self.state     = \"start\"  # start / playing / paused / clear / gameover\n        self.paddle    = Paddle()\n        self.balls     = []\n        self.blocks    = []\n        self.particles = []\n        self._create_blocks()\n        self._launch_ball()\n\n    def _create_blocks(self):\n        self.blocks = []\n        for row in range(BLOCK_ROWS):\n            for col in range(BLOCK_COLS):\n                x     = BLOCK_OFFSET_X + col * (BLOCK_WIDTH + BLOCK_PADDING)\n                y     = BLOCK_OFFSET_Y + row * (BLOCK_HEIGHT + BLOCK_PADDING)\n                color = BLOCK_COLORS[row % len(BLOCK_COLORS)]\n                # レベル2以降は上2行が耐久度2\n                dur   = 2 if (self.level >= 2 and row < 2) else 1\n                self.blocks.append(Block(x, y, color, dur))\n\n    def _launch_ball(self):\n        bx    = self.paddle.rect.centerx\n        by    = self.paddle.rect.top - BALL_RADIUS - 2\n        speed = BALL_SPEED + (self.level - 1) * 0.6  # レベルごとに加速\n        self.balls = [Ball(bx, by, speed)]\n\n    # ---------- メインループ ----------\n    def run(self):\n        while True:\n            self.clock.tick(FPS)\n            self._handle_events()\n            if self.state == \"playing\":\n                self._update()\n            self._draw()\n\n    # ---------- イベント ----------\n    def _handle_events(self):\n        for event in pygame.event.get():\n            if event.type == pygame.QUIT:\n                pygame.quit()\n                sys.exit()\n\n            if event.type == pygame.KEYDOWN:\n                if event.key == pygame.K_ESCAPE:\n                    pygame.quit()\n                    sys.exit()\n\n                if self.state == \"start\":\n                    if event.key in (pygame.K_SPACE, pygame.K_RETURN):\n                        self.state = \"playing\"\n\n                elif self.state == \"playing\":\n                    if event.key == pygame.K_p:\n                        self.state = \"paused\"\n\n                elif self.state == \"paused\":\n                    if event.key == pygame.K_p:\n                        self.state = \"playing\"\n\n                elif self.state in (\"clear\", \"gameover\"):\n                    if event.key in (pygame.K_SPACE, pygame.K_RETURN):\n                        self.reset()\n\n    # ---------- 更新 ----------\n    def _update(self):\n        keys = pygame.key.get_pressed()\n        self.paddle.update(keys)\n\n        for ball in self.balls[:]:\n            ball.update()\n\n            # パドルとの衝突\n            if ball.rect.colliderect(self.paddle.rect) and ball.vy > 0:\n                ball.reflect_paddle(self.paddle)\n\n            # ブロックとの衝突\n            for block in self.blocks:\n                if not block.alive:\n                    continue\n                if ball.rect.colliderect(block.rect):\n                    self._resolve_ball_block(ball, block)\n                    if block.hit():\n                        self.score += 10 * self.level\n                        for _ in range(18):\n                            self.particles.append(\n                                Particle(block.rect.centerx, block.rect.centery, block.color)\n                            )\n                    break  # 1フレームに1ブロックまで\n\n            if not ball.alive:\n                self.balls.remove(ball)\n\n        # ボール消滅\n        if not self.balls:\n            self.lives -= 1\n            if self.lives <= 0:\n                self.state = \"gameover\"\n            else:\n                self._launch_ball()\n\n        # パーティクル更新\n        self.particles = [p for p in self.particles if p.life > 0]\n        for p in self.particles:\n            p.update()\n\n        # 全ブロック破壊 → クリア\n        if all(not b.alive for b in self.blocks):\n            self.level += 1\n            self._create_blocks()\n            self._launch_ball()\n            self.state = \"clear\"\n\n    def _resolve_ball_block(self, ball, block):\n        \"\"\"どの面で当たったか判定して反射\"\"\"\n        br = ball.rect\n        bl = block.rect\n        overlaps = [\n            br.right  - bl.left,   # 左面\n            bl.right  - br.left,   # 右面\n            br.bottom - bl.top,    # 上面\n            bl.bottom - br.top,    # 下面\n        ]\n        m = min(overlaps)\n        if m == overlaps[2] and ball.vy > 0:\n            ball.vy = -abs(ball.vy)\n            ball.y  = bl.top - ball.radius\n        elif m == overlaps[3] and ball.vy < 0:\n            ball.vy = abs(ball.vy)\n            ball.y  = bl.bottom + ball.radius\n        elif m == overlaps[0] and ball.vx > 0:\n            ball.vx = -abs(ball.vx)\n            ball.x  = bl.left - ball.radius\n        elif m == overlaps[1] and ball.vx < 0:\n            ball.vx = abs(ball.vx)\n            ball.x  = bl.right + ball.radius\n\n    # ---------- 描画 ----------\n    def _draw(self):\n        self.screen.fill(DARK_GRAY)\n        self._draw_grid()\n        for block in self.blocks:\n            block.draw(self.screen)\n        for p in self.particles:\n     p.draw(self.screen)\n        self.paddle.draw(self.screen)\n        for ball in self.balls:\n            ball.draw(self.screen)\n        self._draw_hud()\n\n        if   self.state == \"start\":\n            self._draw_overlay(\"ブロック崩し\", \"SPACE / ENTER でスタート\")\n        elif self.state == \"paused\":\n            self._draw_overlay(\"ポーズ中\", \"P キーで再開\")\n        elif self.state == \"clear\":\n            self._draw_overlay(f\"LEVEL {self.level - 1} クリア！\", \"SPACE / ENTER で次のレベルへ\")\n        elif self.state == \"gameover\":\n            self._draw_overlay(\"GAME OVER\", f\"スコア: {self.score}  |  SPACE / ENTER でリトライ\")\n\n        pygame.display.flip()\n\n    def _draw_grid(self):\n        for x in range(0, SCREEN_WIDTH, 40):\n            pygame.draw.line(self.screen, GRAY, (x, 0), (x, SCREEN_HEIGHT))\n        for y in range(0, SCREEN_HEIGHT, 40):\n            pygame.draw.line(self.screen, GRAY, (0, y), (SCREEN_WIDTH, y))\n\n    def _draw_hud(self):\n        score_surf = self.font_small.render(f\"SCORE  {self.score:>6}\", True, WHITE)\n        self.screen.blit(score_surf, (16, 12))\n        lv_surf = self.font_small.render(f\"LEVEL  {self.level}\", True, YELLOW)\n        self.screen.blit(lv_surf, (SCREEN_WIDTH // 2 - lv_surf.get_width() // 2, 12))\n        for i in range(self.lives):\n            h = self.font_small.render(\"♥\", True, RED)\n            self.screen.blit(h, (SCREEN_WIDTH - 30 - i * 28, 12))\n\n    def _draw_overlay(self, title, subtitle):\n        ov = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)\n        ov.fill((0, 0, 0, 170))\n        self.screen.blit(ov, (0, 0))\n        ts = self.font_large.render(title, True, CYAN)\n        ss = self.font_medium.render(subtitle, True, WHITE)\n        self.screen.blit(ts, (SCREEN_WIDTH // 2 - ts.get_width() // 2, SCREEN_HEIGHT // 2 - 60))\n        self.screen.blit(ss, (SCREEN_WIDTH // 2 - ss.get_width() // 2, SCREEN_HEIGHT // 2 + 20))\n        if self.state == \"start\":\n            hints = [\"← → / A D : パドル移動\", \"P : ポーズ\", \"ESC : 終了\"]\n            for i, hint in enumerate(hints):\n                hs = self.font_small.render(hint, True, GRAY)\n                self.screen.blit(hs, (SCREEN_WIDTH // 2 - hs.get_width() // 2,\n                                      SCREEN_HEIGHT // 2 + 90 + i * 30))\n\n\n# ==================== エントリポイント ====================\nif __name__ == \"__main__\":\n    game = BreakoutGame()\n    game.run()\n","path":"/home/swkima/Develop/playground/breakout.py"})
+│  Yes
+│
+◇  write completed
+│
+◇  Done
+│
+●  Assistant
+│  作成完了です！ファイル構成を確認します。
+│
+├  Token Usage: 23424 / 700000
+│
+◇  Allow tool call: bash({"command":"cd /home/swkima/Develop/playground && cat pyproject.toml"})
+│  Yes
+│
+◇  bash completed
+│
+◇  Done
+│
+●  Assistant
+│  完璧です！以下の構成で準備が整いました。
+│
+│  ---
+│
+│  ## ファイル構成
+│
+│  ```
+│  playground/
+│  ├── pyproject.toml   ← uv が管理（pygame>=2.6.1 を依存に追加済み）
+│  ├── .venv/           ← uv が作成した仮想環境
+│  └── breakout.py      ← ゲーム本体
+│  ```
+│
+│  ## 実行方法
+│
+│  ```bash
+│  uv run python breakout.py
+│  ```
+│
+│  ---
+│
+│  ## ゲーム仕様まとめ
+│
+│  | 項目 | 内容 |
+│  |------|------|
+│  | **操作** | `←` `→` または `A` `D` でパドル移動 |
+│  | **ポーズ** | `P` キーで一時停止・再開 |
+│  | **終了** | `ESC` |
+│  | **スコア** | ブロック破壊で `10 × レベル` 点 |
+│  | **ライフ** | 3回ミスでゲームオーバー（♥ 表示） |
+│  | **レベル** | 全ブロック破壊で次のレベルへ進み、ボールが加速 |
+│  | **耐久ブロック** | レベル2以降の上2列は2回当てないと壊れない（白縁で識別） |
+│  | **演出** | ボールの残像トレイル・ブロック破壊時パーティクル・ヒット白フラッシュ |
+│  | **反射** | パドルの当たった位置で反射角が変化（端ほど急角度） |
+│
+├  Token Usage: 23950 / 700000
+│
+◆  User:
+│  Type your message... (type 'exit' to quit)
+└  [Esc](Preview)

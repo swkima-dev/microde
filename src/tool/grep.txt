@@ -6,4 +6,4 @@ Usage:
 - If path is a directory, all files within it are searched recursively.
 - Results are returned in the format `<path>:<line_number>: <line_content>`.
 - Use this tool to find specific content in files.
-- Use the grob tool to find files by name pattern first if you are unsure of the path.
+- Use the glob tool to find files by name pattern first if you are unsure of the path.

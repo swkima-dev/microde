@@ -11,7 +11,7 @@ use rig::message::AssistantContent;
 use rig::providers::anthropic::{Client, completion::ANTHROPIC_VERSION_LATEST};
 use rig::tool::ToolSet;
 use system_context::SystemContexts;
-use tool::{bash::Bash, grep::Grep, grob::Grob, read::Read, write::FullWrite};
+use tool::{bash::Bash, glob::Glob, grep::Grep, read::Read, write::FullWrite};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -35,7 +35,7 @@ async fn main() -> Result<(), anyhow::Error> {
     main_tool.add_tool(Bash);
     main_tool.add_tool(Read);
     main_tool.add_tool(Grep);
-    main_tool.add_tool(Grob);
+    main_tool.add_tool(Glob);
     main_tool.add_tool(FullWrite);
 
     let mut system_prompt = SystemContexts::new();
@@ -66,7 +66,7 @@ async fn main() -> Result<(), anyhow::Error> {
             .tool(Bash)
             .tool(Read)
             .tool(Grep)
-            .tool(Grob)
+            .tool(Glob)
             .tool(FullWrite)
             .build();
 

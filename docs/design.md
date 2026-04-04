@@ -105,7 +105,7 @@ Agentが実装した `Completion` トレイトから `CompletionRequestBuilder`�
 | `read`  | `src/tool/read.rs` | ファイルの読み取り |
 | `write` | `src/tool/write.rs`| ファイル全体を書き込み。新規作成と上書きが可能|
 | `grep`  | `src/tool/grep.rs` | 正規表現でファイル内容を検索 |
-| `glob`  | `src/tool/grob.rs` | globパターンでファイルを検索 |
+| `glob`  | `src/tool/glob.rs` | globパターンでファイルを検索 |
 | `task`  | `src/tool/task.rs` | サブエージェントの起動。子セッションを作成し、独立したLLM_process()で実行 |
 
 ## セッションとログの管理
