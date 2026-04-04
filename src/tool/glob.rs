@@ -3,24 +3,24 @@ use serde::{Deserialize, Serialize};
 use std::io;
 
 #[derive(Deserialize)]
-pub struct GrobArgs {
+pub struct GlobArgs {
     pattern: String,
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct Grob;
+pub struct Glob;
 
-impl Tool for Grob {
-    const NAME: &'static str = "grob";
+impl Tool for Glob {
+    const NAME: &'static str = "glob";
 
     type Error = std::io::Error;
-    type Args = GrobArgs;
+    type Args = GlobArgs;
     type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
-            name: "grob".to_string(),
-            description: include_str!("grob.txt").to_string(),
+            name: "glob".to_string(),
+            description: include_str!("glob.txt").to_string(),
             parameters: serde_json::json!({
                 "type": "object",
                 "required": ["pattern"],
@@ -34,7 +34,7 @@ impl Tool for Grob {
         }
     }
 
-    async fn call(&self, args: GrobArgs) -> Result<Self::Output, Self::Error> {
+    async fn call(&self, args: GlobArgs) -> Result<Self::Output, Self::Error> {
         let mut paths: Vec<String> = glob::glob(&args.pattern)
             .map_err(io::Error::other)?
             .filter_map(|r| r.ok())
